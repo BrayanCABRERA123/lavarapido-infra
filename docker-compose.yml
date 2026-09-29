@@ -1,0 +1,65 @@
+# Backend de LavaRapido — entorno local.
+#
+#   docker compose up -d                          -> solo SQL Server (los servicios se corren desde el IDE)
+#   docker compose --profile app up -d --build    -> SQL Server + todos los servicios del backend en contenedores
+#
+# Los secretos salen de ./.env (copiar .env.example). Nunca subir el .env.
+name: lavarapido
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: lavarapido-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Backend/.env (see .env.example)}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -b -Q 'SELECT 1' -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Se ejecuta una vez: SQL Server no crea las bases de datos de la aplicación por sí solo.
+  # El Liquibase de cada servicio crea solo sus propios esquemas dentro de esta base (ADR-009).
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: lavarapido-db-init
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-LavaRapido}
+    entrypoint:
+      - /bin/bash
+      - -c
+      - /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -Q "IF DB_ID('$$DB_NAME') IS NULL CREATE DATABASE [$$DB_NAME]"
+    restart: "no"
+
+  security-service:
+    profiles: ["app"]
+    # cada servicio vive en su propio repo, clonado al lado de lavarapido-infra
+    build: ../security-service
+    image: lavarapido/security-service:local
+    container_name: lavarapido-security-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+    ports:
+      - "3001:3001"
+
+volumes:
+  sqlserver-data:

@@ -1,0 +1,19 @@
+# Local secrets
+.env
+*.env
+!.env.example
+
+# Build output
+target/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
