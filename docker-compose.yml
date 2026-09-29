@@ -45,7 +45,7 @@ services:
   security-service:
     profiles: ["app"]
     # cada servicio vive en su propio repo, clonado al lado de lavarapido-infra
-    build: ../security-service
+    build: ../lavarapido-security-service
     image: lavarapido/security-service:local
     container_name: lavarapido-security-service
     depends_on:

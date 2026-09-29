@@ -6,7 +6,7 @@ holds what they share: the database container, the compose file and the secrets 
 
 | Service | Repository | Port | Schemas | Status |
 |---|---|---|---|---|
-| `security-service` | `security-service` | 3001 | `security`, `audit` | Implemented |
+| `security-service` | `lavarapido-security-service` | 3001 | `security`, `audit` | Implemented |
 | `customer-service` | — | — | `customer` | Planned |
 | `booking-service` | — | — | `catalog`, `booking` | Planned |
 | `operations-service` | — | — | `execution` | Planned |
@@ -22,10 +22,12 @@ Clone every repository side by side in the same folder:
 ```
 Backend/
 ├── lavarapido-infra/      ← this repository
-├── security-service/
-├── customer-service/
+├── lavarapido-security-service/
+├── lavarapido-customer-service/
 └── ...
 ```
+
+Team guide (Spanish): [`GUIA-EQUIPO.md`](GUIA-EQUIPO.md).
 
 The services find the shared `.env` at `../lavarapido-infra/.env`, and `docker compose` builds
 them from `../<service>`.
@@ -45,7 +47,7 @@ cp .env.example .env        # set DB_PASSWORD and JWT_SECRET (openssl rand -base
 docker compose up -d        # SQL Server 2022 + creates the LavaRapido database
 
 # 3. A service, from its own repository
-cd ../security-service
+cd ../lavarapido-security-service
 ./mvnw spring-boot:run      # Windows: .\mvnw.cmd spring-boot:run
 ```
 
