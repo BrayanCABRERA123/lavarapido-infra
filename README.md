@@ -8,7 +8,7 @@ holds what they share: the database container, the compose file and the secrets 
 |---|---|---|---|---|
 | `security-service` | `lavarapido-security-service` | 3001 | `security`, `audit` | Implemented |
 | `customer-service` | `lavarapido-customer-service` | 3002 | `customer` | Implemented |
-| `booking-service` | — | — | `catalog`, `booking` | Planned |
+| `booking-service` | `lavarapido-booking-service` | 3003 | `catalog`, `booking` | Implemented |
 | `operations-service` | — | — | `execution` | Planned |
 | `payment-service` | — | — | `promotion`, `payment` | Planned |
 | `notification-service` | `lavarapido-notification-service` | 3006 | `notification` | Implemented |
