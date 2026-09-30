@@ -7,7 +7,7 @@ holds what they share: the database container, the compose file and the secrets 
 | Service | Repository | Port | Schemas | Status |
 |---|---|---|---|---|
 | `security-service` | `security-service` | 3001 | `security`, `audit` | Implemented |
-| `customer-service` | — | — | `customer` | Planned |
+| `customer-service` | `customer-service` | 3002 | `customer` | Implemented |
 | `booking-service` | — | — | `catalog`, `booking` | Planned |
 | `operations-service` | — | — | `execution` | Planned |
 | `payment-service` | — | — | `promotion`, `payment` | Planned |
