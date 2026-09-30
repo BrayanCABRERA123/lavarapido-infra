@@ -1,7 +1,7 @@
 # LavaRapido — Infrastructure
 
-Shared local infrastructure for the LavaRapido microservices: SQL Server today, and later RabbitMQ
-and the API Gateway. Every microservice lives in **its own repository**; this repository only
+Shared local infrastructure for the LavaRapido microservices: SQL Server, RabbitMQ (domain events,
+ADR-004) and Mailpit; the API Gateway comes later. Every microservice lives in **its own repository**; this repository only
 holds what they share: the database container, the compose file and the secrets template.
 
 | Service | Repository | Port | Schemas | Status |
@@ -11,7 +11,7 @@ holds what they share: the database container, the compose file and the secrets 
 | `booking-service` | — | — | `catalog`, `booking` | Planned |
 | `operations-service` | — | — | `execution` | Planned |
 | `payment-service` | — | — | `promotion`, `payment` | Planned |
-| `notification-service` | — | — | `notification` | Planned |
+| `notification-service` | `lavarapido-notification-service` | 3006 | `notification` | Implemented |
 
 The frontend lives in `Front-end-proyecto-web`.
 

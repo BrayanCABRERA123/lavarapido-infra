@@ -12,13 +12,13 @@ Cada pieza vive en **su propio repositorio**:
 | Repositorio | Qué tiene | Estado |
 |---|---|---|
 | `Front-end-proyecto-web` | App Angular (cliente, operario, admin) | Activo |
-| `lavarapido-infra` | SQL Server en Docker, `docker-compose.yml`, plantilla `.env`, esta guía | Activo |
+| `lavarapido-infra` | SQL Server, RabbitMQ y Mailpit en Docker, `docker-compose.yml`, plantilla `.env`, esta guía | Activo |
 | `lavarapido-security-service` | Cuentas, login con JWT, recuperación de contraseña, perfil, usuarios | Activo |
-| `lavarapido-customer-service` | Clientes, vehículos, puntos (copia) | Por hacer |
+| `lavarapido-customer-service` | Clientes, vehículos, puntos (copia) | Activo |
 | `lavarapido-booking-service` | Catálogo, precios, horarios, bahías, reservas | Por hacer |
 | `lavarapido-operations-service` | Operarios, disponibilidad, ejecución, calificaciones | Por hacer |
 | `lavarapido-payment-service` | Promociones, pagos, comprobantes, puntos (libro contable) | Por hacer |
-| `lavarapido-notification-service` | Notificaciones dentro de la app | Por hacer |
+| `lavarapido-notification-service` | Notificaciones: bandeja, push al celular, mensajes del admin; escucha eventos de RabbitMQ | Activo |
 
 Todos los servicios usan **la misma base de datos** (`LavaRapido` en SQL Server), pero cada uno
 es dueño de **sus propios esquemas** y nadie toca las tablas de otro (ADR-003, ADR-009). Por eso
@@ -196,6 +196,7 @@ Cada servicio tiene su documentación interactiva **solo en desarrollo**:
 | Servicio | Swagger |
 |---|---|
 | security-service | http://localhost:3001/swagger-ui.html |
+| notification-service | http://localhost:3006/swagger-ui.html |
 
 **Cómo probar un endpoint protegido:**
 
@@ -211,6 +212,37 @@ Cada servicio tiene su documentación interactiva **solo en desarrollo**:
 > **Regla del equipo:** todo servicio nuevo **debe** traer Swagger (ver sección 8.4).
 
 ---
+
+## 7.1 RabbitMQ: eventos entre servicios (ADR-004)
+
+Los servicios se hablan de dos formas: **REST** cuando necesitan validar algo en el momento, y
+**eventos por RabbitMQ** para avisar "pasó X" sin frenar al usuario (ej. notificaciones).
+
+- `docker compose up -d` ya levanta RabbitMQ. Panel: http://localhost:15672 (`guest` / `guest`).
+- En el `.env`: `MESSAGING_ENABLED=true` para que los servicios publiquen y escuchen. Con `false`
+  todo funciona igual, pero los eventos solo quedan en el log.
+- Exchange único: `carwash.events` (topic). Routing key: `<esquema>.<evento_en_snake_case>`,
+  ej. `booking.confirmed` (tabla completa en `05-architecture/cross-cutting.md` §7).
+- Todo mensaje lleva el mismo sobre (JSON):
+
+```json
+{ "eventId": "uuid", "eventType": "BookingConfirmed", "aggregateId": "145",
+  "occurredAt": "2026-10-01T15:00:00Z", "version": 1, "payload": { } }
+```
+
+**Si tu servicio publica un evento que genera notificación** (booking, operations, payment), en el
+`payload` va el `user_id` de quien la recibe: `customerUserId`, `operatorUserId`. La tabla de
+campos por evento está en **ADR-011**. Publica **después** del commit de la base
+(`TransactionSynchronization.afterCommit`), como hace `RabbitDomainEventPublisher` en el
+security-service.
+
+**Si tu servicio escucha eventos:** declara tu propia cola (`<tu-servicio>.events`) enlazada solo
+a las routing keys que necesitas, y guarda el `eventId` procesado para ignorar repetidos (RabbitMQ
+entrega "al menos una vez"). Ejemplo completo: `lavarapido-notification-service`.
+
+Hoy publica: **security** (`security.user_registered`). Hoy escucha: **notification**. El
+**customer-service** debe escuchar `security.user_registered` para crear el perfil de cliente
+(su caso de uso `ConsumeUserRegisteredUseCase` ya existe; falta el listener).
 
 ## 8. Crear un microservicio nuevo (reglas para todos)
 

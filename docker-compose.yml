@@ -1,6 +1,6 @@
 # Backend de LavaRapido — entorno local.
 #
-#   docker compose up -d                          -> solo SQL Server (los servicios se corren desde el IDE)
+#   docker compose up -d                          -> SQL Server, Mailpit y RabbitMQ (los servicios se corren desde el IDE)
 #   docker compose --profile app up -d --build    -> SQL Server + todos los servicios del backend en contenedores
 #
 # Los secretos salen de ./.env (copiar .env.example). Nunca subir el .env.
@@ -54,6 +54,26 @@ services:
       - "1025:1025"   # SMTP
       - "8025:8025"   # bandeja web
 
+  # Mensajería entre servicios (ADR-004): eventos de dominio por el exchange carwash.events.
+  # Panel de administración en http://localhost:15672 (usuario y clave del .env).
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: lavarapido-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"     # AMQP (los servicios)
+      - "15672:15672"   # panel web
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
   security-service:
     profiles: ["app"]
     # cada servicio vive en su propio repo, clonado al lado de lavarapido-infra
@@ -63,6 +83,8 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
@@ -78,6 +100,11 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-LavaRápido <no-reply@lavarapido.local>}
+      # Eventos (ADR-004): dentro de Docker, RabbitMQ se llama "rabbitmq"
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
     ports:
       - "3001:3001"
 
@@ -99,5 +126,33 @@ services:
     ports:
       - "3002:3002"
 
+  notification-service:
+    profiles: ["app"]
+    build: ../lavarapido-notification-service
+    image: lavarapido/notification-service:local
+    container_name: lavarapido-notification-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      # dentro de Docker, RabbitMQ se llama "rabbitmq" (no "localhost")
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+    ports:
+      - "3006:3006"
+
 volumes:
   sqlserver-data:
+  rabbitmq-data:
