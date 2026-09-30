@@ -107,7 +107,7 @@ Abre **una terminal por cada cosa** y déjalas abiertas.
 | # | Dónde | Comando | Cuándo está listo |
 |---|---|---|---|
 | 1 | — | Abrir **Docker Desktop** | Dice *Engine running* |
-| 2 | `lavarapido-infra` | `docker compose up -d` | `docker compose ps` muestra `lavarapido-sqlserver` **healthy** |
+| 2 | `lavarapido-infra` | `docker compose up -d` | `docker compose ps` muestra `lavarapido-sqlserver` **healthy** y `lavarapido-mailpit` arriba |
 | 3 | `lavarapido-security-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started SecurityServiceApplication` |
 | 4 | `Front-end-proyecto-web` | `npx ng serve` | Abre http://localhost:4200 |
 
@@ -145,14 +145,28 @@ Se crean solos la primera vez que arranca `lavarapido-security-service` (perfil 
 - Sin iniciar sesión no se puede entrar a `/admin`, `/operator` ni `/client`.
 - También puedes **registrarte** como cliente nuevo desde la pantalla de registro.
 
-### Recuperar contraseña (en desarrollo)
+### Recuperar contraseña: ¿dónde llega el código?
 
-Todavía no se envían correos. El código de 6 dígitos **sale en la terminal del
-security-service**, en una línea así:
+Depende de lo que tengas en tu `lavarapido-infra/.env`:
 
-```
-[DEV] Password recovery code for tu@gmail.com (Nombre Apellido): 123456 (expires ...)
-```
+| Configuración | Dónde ves el código |
+|---|---|
+| `MAIL_ENABLED=true` + Mailpit (**la que trae `.env.example`**) | En la bandeja de prueba **http://localhost:8025**. No le llega a nadie de verdad |
+| `MAIL_ENABLED=true` + Gmail | En el **correo real** del usuario (revisa también spam) |
+| `MAIL_ENABLED=false` | En la terminal del security-service: `[DEV] Password recovery code for ...: 123456` |
+
+Mailpit se levanta solo con `docker compose up -d`. El correo trae el nombre del usuario, el
+código de 6 dígitos y la hora en que vence.
+
+**Para que llegue a Gmail de verdad** (solo quien tenga la cuenta del proyecto):
+1. La cuenta necesita **verificación en dos pasos** activa.
+2. Crear una **contraseña de aplicación** en https://myaccount.google.com/apppasswords
+   (16 letras; se pega **sin espacios**).
+3. En `.env`, comentar el bloque de Mailpit y llenar el de Gmail (`MAIL_HOST=smtp.gmail.com`,
+   `MAIL_PORT=587`, usuario, contraseña de aplicación y `MAIL_FROM`).
+4. Reiniciar el security-service.
+
+> ⚠️ La contraseña de aplicación es secreta: solo va en tu `.env`, nunca en GitHub ni en el chat.
 
 El código dura 15 minutos, sirve una sola vez y se bloquea después de 5 intentos fallidos.
 
@@ -329,6 +343,8 @@ En `lavarapido-infra/docker-compose.yml` copien el bloque `security-service` y c
 | El login dice "No hay conexión con el servidor" | El servicio no está corriendo, o `ng serve` se abrió antes de tener el proxy | Levantar el servicio y reiniciar `ng serve` |
 | SQL Server no arranca en Docker | `DB_PASSWORD` muy débil | Poner una más fuerte en `.env` y `docker compose down -v` + `up -d` |
 | `mvnw` no se reconoce | Estás en PowerShell | Usar `.\mvnw.cmd` |
+| No llega el correo de recuperación | `MAIL_ENABLED=false`, Mailpit apagado, o la contraseña de aplicación de Gmail está mal | Revisar el `.env`; en la terminal del servicio buscar `Could not send the password recovery email` |
+| Gmail responde `535 Username and Password not accepted` | Se usó la contraseña normal o se pegó con espacios | Usar la contraseña de aplicación de 16 letras, sin espacios |
 
 ---
 
