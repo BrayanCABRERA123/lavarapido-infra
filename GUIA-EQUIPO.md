@@ -15,7 +15,7 @@ Cada pieza vive en **su propio repositorio**:
 | `lavarapido-infra` | SQL Server, RabbitMQ y Mailpit en Docker, `docker-compose.yml`, plantilla `.env`, esta guía | Activo |
 | `lavarapido-security-service` | Cuentas, login con JWT, recuperación de contraseña, perfil, usuarios | Activo |
 | `lavarapido-customer-service` | Clientes, vehículos, puntos (copia) | Activo |
-| `lavarapido-booking-service` | Catálogo, precios, horarios, bahías, reservas | Por hacer |
+| `lavarapido-booking-service` | Catálogo, precios, horarios, bahías, reservas | Activo |
 | `lavarapido-operations-service` | Operarios, disponibilidad, ejecución, calificaciones | Por hacer |
 | `lavarapido-payment-service` | Promociones, pagos, comprobantes, puntos (libro contable) | Por hacer |
 | `lavarapido-notification-service` | Notificaciones: bandeja, push al celular, mensajes del admin; escucha eventos de RabbitMQ | Activo |
@@ -180,10 +180,12 @@ Mínimo 8 caracteres, una mayúscula, un número y un carácter especial (ej. `L
 
 | Conectado (datos reales) | Todavía con datos de prueba |
 |---|---|
-| Login, registro, recuperar contraseña | Reservas, vehículos, historial, pagos, notificaciones |
+| Login, registro, recuperar contraseña | Historial, pagos, notificaciones |
 | Cambiar contraseña (modal del perfil) | Todo lo del operario |
 | Cerrar sesión | Todo lo del admin (reservas, operarios, pagos, horarios, catálogo, promociones, reportes, usuarios) |
 | Protección de rutas por rol | Editar perfil y preferencias (el backend ya tiene los endpoints) |
+| Vehículos (customer-service) | |
+| Reservas, catálogo, sedes (booking-service) | |
 
 Las pantallas pendientes se conectan a medida que existan sus microservicios (tabla de la sección 1).
 
@@ -196,6 +198,8 @@ Cada servicio tiene su documentación interactiva **solo en desarrollo**:
 | Servicio | Swagger |
 |---|---|
 | security-service | http://localhost:3001/swagger-ui.html |
+| customer-service | http://localhost:3002/swagger-ui.html |
+| booking-service | http://localhost:3003/swagger-ui.html |
 | notification-service | http://localhost:3006/swagger-ui.html |
 
 **Cómo probar un endpoint protegido:**
