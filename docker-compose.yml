@@ -15,7 +15,12 @@ services:
       MSSQL_PID: Developer
       MSSQL_SA_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Backend/.env (see .env.example)}
     ports:
-      - "1433:1433"
+      # Mapeado a 14330 en el host: el puerto 1433 nativo ya está tomado por una instancia
+      # de SQL Server instalada en Windows (MSSQLSERVER), y Docker Desktop no lo detecta como
+      # ocupado al publicar el puerto del contenedor, así que localhost:1433 termina respondiendo
+      # con la instancia nativa en vez del contenedor. Dentro de la red de docker compose (entre
+      # contenedores) sigue siendo el 1433 de siempre.
+      - "14330:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
     healthcheck:
