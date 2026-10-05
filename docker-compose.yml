@@ -15,12 +15,10 @@ services:
       MSSQL_PID: Developer
       MSSQL_SA_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Backend/.env (see .env.example)}
     ports:
-      # Mapeado a 14330 en el host: el puerto 1433 nativo ya está tomado por una instancia
-      # de SQL Server instalada en Windows (MSSQLSERVER), y Docker Desktop no lo detecta como
-      # ocupado al publicar el puerto del contenedor, así que localhost:1433 termina respondiendo
-      # con la instancia nativa en vez del contenedor. Dentro de la red de docker compose (entre
-      # contenedores) sigue siendo el 1433 de siempre.
-      - "14330:1433"
+      # Si en el equipo hay un SQL Server nativo de Windows en el 1433, hay que detener
+      # el servicio MSSQLSERVER; si no, localhost:1433 responde la instancia nativa
+      # y los servicios fallan con "Login failed for user 'sa'".
+      - "1433:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
     healthcheck:
@@ -45,6 +43,27 @@ services:
       - /bin/bash
       - -c
       - /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -Q "IF DB_ID('$$DB_NAME') IS NULL CREATE DATABASE [$$DB_NAME]"
+    restart: "no"
+
+  # Tablas de payment-service (esquemas payment y promotion). El servicio es .NET y no aplica
+  # Liquibase al arrancar como los Java: este contenedor corre sus changelogs una vez y termina.
+  payment-migrate:
+    image: liquibase/liquibase:4.29
+    container_name: lavarapido-payment-migrate
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    volumes:
+      - ../lavarapido-payment-service/db:/liquibase/changelog/db:ro
+    command:
+      - --search-path=/liquibase/changelog
+      - --changelog-file=db/changelog/db.changelog-master.yaml
+      - --url=jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
+      - --username=sa
+      - --password=${DB_PASSWORD}
+      - --database-change-log-table-name=DATABASECHANGELOG_PAYMENT
+      - --database-change-log-lock-table-name=DATABASECHANGELOGLOCK_PAYMENT
+      - update
     restart: "no"
 
   # Servidor de correo SOLO para desarrollo: atrapa los correos que envían los servicios (no
@@ -105,6 +124,8 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-LavaRápido <no-reply@lavarapido.local>}
+      # llave para las rutas entre servicios /internal/** (ADR-011 sección 8)
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       # Eventos (ADR-004): dentro de Docker, RabbitMQ se llama "rabbitmq"
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
@@ -169,6 +190,35 @@ services:
     ports:
       - "3003:3003"
 
+  operations-service:
+    profiles: ["app"]
+    build: ../lavarapido-operations-service
+    image: lavarapido/operations-service:local
+    container_name: lavarapido-operations-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      # reservas (leer, empezar, terminar) y nombres de los operarios (REST, ADR-004)
+      BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
+      SECURITY_SERVICE_URL: http://security-service:3001/api/v1
+      BOOKING_ZONE: ${BOOKING_ZONE:-America/Bogota}
+      # publica OperatorAssigned / ServiceStarted / ServiceCompleted a notification-service
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "3004:3004"
+
   notification-service:
     profiles: ["app"]
     build: ../lavarapido-notification-service
@@ -193,6 +243,10 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       PUSH_ENABLED: ${PUSH_ENABLED:-false}
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      # correo del cliente para avisos de reserva y recordatorios (ADR-011 sección 8)
+      SECURITY_SERVICE_URL: http://security-service:3001
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      REMINDER_LEADS: ${REMINDER_LEADS:-24h,1h}
       # Correo de bienvenida: mismas variables que el security-service
       MAIL_ENABLED: ${MAIL_ENABLED:-false}
       MAIL_HOST: ${MAIL_DOCKER_HOST:-mailpit}
@@ -202,6 +256,27 @@ services:
       MAIL_FROM: ${MAIL_FROM:-LavaRápido <no-reply@lavarapido.local>}
     ports:
       - "3006:3006"
+
+  api-gateway:
+    profiles: ["app"]
+    # punto de entrada único (ADR-005): la web y el móvil solo llaman al 8080
+    build: ../lavarapido-api-gateway
+    image: lavarapido/api-gateway:local
+    container_name: lavarapido-api-gateway
+    depends_on:
+      - security-service
+      - customer-service
+      - booking-service
+      - operations-service
+      - notification-service
+    environment:
+      ROUTE_SECURITY_URL: http://security-service:3001
+      ROUTE_CUSTOMER_URL: http://customer-service:3002
+      ROUTE_OPERATIONS_URL: http://operations-service:3004
+      ROUTE_BOOKING_URL: http://booking-service:3003
+      ROUTE_NOTIFICATION_URL: http://notification-service:3006
+    ports:
+      - "8080:8080"
 
 volumes:
   sqlserver-data:
