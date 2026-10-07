@@ -16,7 +16,7 @@ Cada pieza vive en **su propio repositorio**:
 | `lavarapido-security-service` | Cuentas, login con JWT, recuperación de contraseña, perfil, usuarios | Activo |
 | `lavarapido-customer-service` | Clientes, vehículos, puntos (copia) | Activo |
 | `lavarapido-booking-service` | Catálogo, precios, horarios, bahías, reservas | Activo |
-| `lavarapido-operations-service` | Operarios, disponibilidad, ejecución, calificaciones | Por hacer |
+| `lavarapido-operation-service` | Operarios, disponibilidad, ejecución, calificaciones | Por hacer |
 | `lavarapido-payment-service` | Promociones, pagos, comprobantes, puntos (libro contable) | Por hacer |
 | `lavarapido-notification-service` | Notificaciones: bandeja, push al celular, mensajes del admin; escucha eventos de RabbitMQ | Activo |
 
@@ -257,7 +257,7 @@ Hoy publica: **security** (`security.user_registered`). Hoy escucha: **notificat
 | security | `lavarapido-security-service` | `com.lavarapido.security` | 3001 | `security`, `audit` |
 | customer | `lavarapido-customer-service` | `com.lavarapido.customer` | 3002 | `customer` |
 | booking | `lavarapido-booking-service` | `com.lavarapido.booking` | 3003 | `catalog`, `booking` |
-| operations | `lavarapido-operations-service` | `com.lavarapido.operations` | 3004 | `execution` |
+| operations | `lavarapido-operation-service` | `com.lavarapido.operations` | 3004 | `execution` |
 | payment | `lavarapido-payment-service` | `com.lavarapido.payment` | 3005 | `promotion`, `payment` |
 | notification | `lavarapido-notification-service` | `com.lavarapido.notification` | 3006 | `notification` |
 

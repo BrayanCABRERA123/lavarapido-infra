@@ -192,7 +192,7 @@ services:
 
   operations-service:
     profiles: ["app"]
-    build: ../lavarapido-operations-service
+    build: ../lavarapido-operation-service
     image: lavarapido/operations-service:local
     container_name: lavarapido-operations-service
     depends_on:
