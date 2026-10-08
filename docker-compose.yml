@@ -192,7 +192,8 @@ services:
 
   operations-service:
     profiles: ["app"]
-    build: ../lavarapido-operations-service
+    # ojo: el repo se llama lavarapido-operation-service (singular), no "operations"
+    build: ../lavarapido-operation-service
     image: lavarapido/operations-service:local
     container_name: lavarapido-operations-service
     depends_on:
@@ -257,6 +258,36 @@ services:
     ports:
       - "3006:3006"
 
+  payment-service:
+    profiles: ["app"]
+    # .NET, no Java: no usa Liquibase al arrancar (eso lo hace payment-migrate una sola vez)
+    build: ../lavarapido-payment-service
+    image: lavarapido/payment-service:local
+    container_name: lavarapido-payment-service
+    depends_on:
+      payment-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_started
+    environment:
+      DB_HOST: sqlserver
+      DB_PORT: "1433"
+      DB_NAME: ${DB_NAME:-LavaRapido}
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      PAYMENT_PORT: "3005"
+      # cliente REST hacia booking-service (ADR-004): faltaba, lo necesita IBookingDirectory
+      BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
+      # carwash.events (fidelización/promociones: ADR-011, canje de cupones)
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "3005:3005"
+
   api-gateway:
     profiles: ["app"]
     # punto de entrada único (ADR-005): la web y el móvil solo llaman al 8080
@@ -268,12 +299,14 @@ services:
       - customer-service
       - booking-service
       - operations-service
+      - payment-service
       - notification-service
     environment:
       ROUTE_SECURITY_URL: http://security-service:3001
       ROUTE_CUSTOMER_URL: http://customer-service:3002
       ROUTE_OPERATIONS_URL: http://operations-service:3004
       ROUTE_BOOKING_URL: http://booking-service:3003
+      ROUTE_PAYMENT_URL: http://payment-service:3005
       ROUTE_NOTIFICATION_URL: http://notification-service:3006
     ports:
       - "8080:8080"
