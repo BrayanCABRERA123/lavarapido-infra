@@ -16,9 +16,10 @@ Cada pieza vive en **su propio repositorio**:
 | `lavarapido-security-service` | Cuentas, login con JWT, recuperación de contraseña, perfil, usuarios | Activo |
 | `lavarapido-customer-service` | Clientes, vehículos, puntos (copia) | Activo |
 | `lavarapido-booking-service` | Catálogo, precios, horarios, bahías, reservas | Activo |
-| `lavarapido-operations-service` | Operarios, disponibilidad, ejecución, calificaciones | Por hacer |
-| `lavarapido-payment-service` | Promociones, pagos, comprobantes, puntos (libro contable) | Por hacer |
+| `lavarapido-operation-service` | Operarios, disponibilidad, asignación, ejecución, calificaciones | Activo |
+| `lavarapido-payment-service` | Cuentas de pago con QR, pagos manuales con comprobante, revisión del admin (.NET) | Activo (promociones y puntos pendientes) |
 | `lavarapido-notification-service` | Notificaciones: bandeja, push al celular, mensajes del admin; escucha eventos de RabbitMQ | Activo |
+| `lavarapido-api-gateway` | Spring Cloud Gateway: punto de entrada único en el 8080, enruta a cada servicio (ADR-005) | Activo |
 
 Todos los servicios usan **la misma base de datos** (`LavaRapido` en SQL Server), pero cada uno
 es dueño de **sus propios esquemas** y nadie toca las tablas de otro (ADR-003, ADR-009). Por eso
@@ -102,23 +103,30 @@ npm install
 
 ## 4. Día a día: qué ejecutar en cada repo
 
-Abre **una terminal por cada cosa** y déjalas abiertas.
+Abre **una terminal por cada cosa** y déjalas abiertas. La web y el móvil **solo** hablan con el
+api-gateway (8080); el gateway reparte cada petición al servicio que le toca (ADR-005).
 
 | # | Dónde | Comando | Cuándo está listo |
 |---|---|---|---|
 | 1 | — | Abrir **Docker Desktop** | Dice *Engine running* |
 | 2 | `lavarapido-infra` | `docker compose up -d` | `docker compose ps` muestra `lavarapido-sqlserver` **healthy** y `lavarapido-mailpit` arriba |
 | 3 | `lavarapido-security-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started SecurityServiceApplication` |
-| 4 | `Front-end-proyecto-web` | `npx ng serve` | Abre http://localhost:4200 |
+| 4 | `lavarapido-customer-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started CustomerServiceApplication` |
+| 5 | `lavarapido-booking-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started BookingServiceApplication` |
+| 6 | `lavarapido-operation-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started OperationServiceApplication` |
+| 7 | `lavarapido-notification-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started NotificationServiceApplication` |
+| 8 | `lavarapido-payment-service` | `dotnet run --project src/PaymentService.Api` | Responde `http://localhost:5080/health` (o el `PAYMENT_PORT` que tengas) |
+| 9 | `lavarapido-api-gateway` | `.\mvnw.cmd spring-boot:run` | Sale `Started ApiGatewayApplication`, responde `http://localhost:8080` |
+| 10 | `Front-end-proyecto-web` | `npx ng serve` | Abre http://localhost:4200 |
 
-La primera vez el paso 3 tarda unos minutos porque descarga dependencias y crea las tablas.
+La primera vez cada servicio Java tarda unos minutos porque descarga dependencias y crea sus tablas.
 
-**Para apagar:** `Ctrl + C` en las terminales 3 y 4, y en `lavarapido-infra`:
+**Para apagar:** `Ctrl + C` en todas las terminales de servicios y del front, y en `lavarapido-infra`:
 `docker compose down` (los datos se conservan). Para **borrar** la base y empezar de cero:
 `docker compose down -v`.
 
-**Alternativa (todo en Docker, sin Java instalado):** en `lavarapido-infra`:
-`docker compose --profile app up -d --build`.
+**Alternativa (todo en Docker, sin Java ni .NET instalados):** en `lavarapido-infra`:
+`docker compose --profile app up -d --build` levanta los seis servicios y el gateway en contenedores.
 
 ### Pruebas automáticas de un servicio
 
@@ -180,12 +188,16 @@ Mínimo 8 caracteres, una mayúscula, un número y un carácter especial (ej. `L
 
 | Conectado (datos reales) | Todavía con datos de prueba |
 |---|---|
-| Login, registro, recuperar contraseña | Historial, pagos, notificaciones |
-| Cambiar contraseña (modal del perfil) | Todo lo del operario |
-| Cerrar sesión | Todo lo del admin (reservas, operarios, pagos, horarios, catálogo, promociones, reportes, usuarios) |
-| Protección de rutas por rol | Editar perfil y preferencias (el backend ya tiene los endpoints) |
+| Login, registro, recuperar contraseña | Promociones y puntos de fidelidad (payment-service todavía no los tiene) |
+| Cambiar contraseña, editar perfil y preferencias | Contactos del "Centro de ayuda" (WhatsApp, línea, correo): siguen quemados en el front |
+| Cerrar sesión, protección de rutas por rol | |
 | Vehículos (customer-service) | |
-| Reservas, catálogo, sedes (booking-service) | |
+| Reservas, catálogo, horarios, bahías (booking-service) | |
+| Operarios, asignación, ejecución, calificaciones (operation-service) | |
+| Pagos: cuentas con QR, reporte de comprobante, revisión del admin (payment-service) | |
+| Notificaciones e historial del cliente | |
+| Todo el admin (reservas, operarios, pagos, horarios, catálogo, promociones, reportes, usuarios) | |
+| Todo el operario | |
 
 Las pantallas pendientes se conectan a medida que existan sus microservicios (tabla de la sección 1).
 
@@ -200,7 +212,12 @@ Cada servicio tiene su documentación interactiva **solo en desarrollo**:
 | security-service | http://localhost:3001/swagger-ui.html |
 | customer-service | http://localhost:3002/swagger-ui.html |
 | booking-service | http://localhost:3003/swagger-ui.html |
+| operation-service | http://localhost:3004/swagger-ui.html |
+| payment-service | http://localhost:3005/swagger (Swashbuckle, solo en Development) |
 | notification-service | http://localhost:3006/swagger-ui.html |
+
+El api-gateway (8080) no trae Swagger propio: es solo el enrutador, prueba cada endpoint contra
+el puerto del servicio como en la tabla de arriba, o a través del 8080 con la misma ruta `/api/v1/...`.
 
 **Cómo probar un endpoint protegido:**
 
@@ -244,9 +261,13 @@ security-service.
 a las routing keys que necesitas, y guarda el `eventId` procesado para ignorar repetidos (RabbitMQ
 entrega "al menos una vez"). Ejemplo completo: `lavarapido-notification-service`.
 
-Hoy publica: **security** (`security.user_registered`). Hoy escucha: **notification**. El
-**customer-service** debe escuchar `security.user_registered` para crear el perfil de cliente
-(su caso de uso `ConsumeUserRegisteredUseCase` ya existe; falta el listener).
+Hoy publica: **security** (`security.user_registered`), **booking** (`booking.confirmed` /
+`booking.cancelled`), **operations** (`execution.operator_assigned` / `execution.service_started` /
+`execution.service_completed`). Hoy escucha: **customer** (`security.user_registered`, crea el
+perfil con `UserRegisteredListener`) y **notification**, que además de esas se suscribió de una vez
+a `booking.created` y a `payment.confirmed` / `payment.rejected` (cross-cutting.md §7); nadie las
+publica todavía porque booking solo emite confirmed/cancelled y payment no usa RabbitMQ, así que
+por ahora esos tres bindings no reciben nada.
 
 ## 8. Crear un microservicio nuevo (reglas para todos)
 
@@ -257,8 +278,8 @@ Hoy publica: **security** (`security.user_registered`). Hoy escucha: **notificat
 | security | `lavarapido-security-service` | `com.lavarapido.security` | 3001 | `security`, `audit` |
 | customer | `lavarapido-customer-service` | `com.lavarapido.customer` | 3002 | `customer` |
 | booking | `lavarapido-booking-service` | `com.lavarapido.booking` | 3003 | `catalog`, `booking` |
-| operations | `lavarapido-operations-service` | `com.lavarapido.operations` | 3004 | `execution` |
-| payment | `lavarapido-payment-service` | `com.lavarapido.payment` | 3005 | `promotion`, `payment` |
+| operations | `lavarapido-operation-service` | `com.lavarapido.operations` | 3004 | `execution` |
+| payment | `lavarapido-payment-service` | — (.NET 8, no Java) | 3005 | `promotion`, `payment` |
 | notification | `lavarapido-notification-service` | `com.lavarapido.notification` | 3006 | `notification` |
 
 - Nombre del repo: siempre `lavarapido-<nombre>-service`, en minúsculas.
