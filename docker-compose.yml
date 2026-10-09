@@ -115,7 +115,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-sa}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       # Correo: dentro de Docker, Mailpit se llama "mailpit" (no "localhost").
       # Con Gmail/Brevo se usan tal cual los valores del .env.
       MAIL_ENABLED: ${MAIL_ENABLED:-false}
@@ -150,7 +150,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-sa}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       # de aquí saca el person_id cuando el evento de registro no llegó (REST, ADR-004)
       SECURITY_SERVICE_URL: http://security-service:3001/api/v1
       # escucha security.user_registered para crear el perfil del cliente
@@ -177,7 +177,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-sa}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       # valida que el vehículo sea del cliente (REST, ADR-004)
       CUSTOMER_SERVICE_URL: http://customer-service:3002/api/v1
       # zona horaria del lavadero para el horario y las fechas
@@ -207,7 +207,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-sa}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       # reservas (leer, empezar, terminar) y nombres de los operarios (REST, ADR-004)
       BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
       SECURITY_SERVICE_URL: http://security-service:3001/api/v1
@@ -236,7 +236,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-sa}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       # dentro de Docker, RabbitMQ se llama "rabbitmq" (no "localhost")
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
@@ -276,7 +276,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-sa}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       PAYMENT_PORT: "3005"
       # cliente REST hacia booking-service (ADR-004): faltaba, lo necesita IBookingDirectory
       BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
