@@ -211,6 +211,9 @@ services:
       # reservas (leer, empezar, terminar) y nombres de los operarios (REST, ADR-004)
       BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
       SECURITY_SERVICE_URL: http://security-service:3001/api/v1
+      # primer nombre de clientes y operarios en las calificaciones (contacto interno, llave compartida)
+      SECURITY_INTERNAL_URL: http://security-service:3001
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       BOOKING_ZONE: ${BOOKING_ZONE:-America/Bogota}
       # publica OperatorAssigned / ServiceStarted / ServiceCompleted a notification-service
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
