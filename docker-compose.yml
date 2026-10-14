@@ -180,6 +180,8 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       # valida que el vehículo sea del cliente (REST, ADR-004)
       CUSTOMER_SERVICE_URL: http://customer-service:3002/api/v1
+      # /internal/v1/bookings para operations-service sin usuario detrás (asignación automática RF-008)
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       # zona horaria del lavadero para el horario y las fechas
       BOOKING_ZONE: ${BOOKING_ZONE:-America/Bogota}
       # publica BookingConfirmed / BookingCancelled a notification-service
@@ -214,6 +216,10 @@ services:
       # primer nombre de clientes y operarios en las calificaciones (contacto interno, llave compartida)
       SECURITY_INTERNAL_URL: http://security-service:3001
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      # rutas internas de booking (asignación automática RF-008 y operarios libres RF-010)
+      BOOKING_INTERNAL_URL: http://booking-service:3003
+      # false: el administrador asigna a mano (sin asignación automática)
+      AUTO_ASSIGN_ENABLED: ${AUTO_ASSIGN_ENABLED:-true}
       BOOKING_ZONE: ${BOOKING_ZONE:-America/Bogota}
       # publica OperatorAssigned / ServiceStarted / ServiceCompleted a notification-service
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
