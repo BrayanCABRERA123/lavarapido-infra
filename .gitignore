@@ -17,3 +17,7 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+
+# Pruebas e2e: dependencias y capturas
+e2e/node_modules/
+e2e/shots/
