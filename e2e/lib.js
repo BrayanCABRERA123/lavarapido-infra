@@ -79,6 +79,20 @@ DELETE FROM booking.booking_service WHERE booking_id IN (${list});
 DELETE FROM booking.booking WHERE booking_id IN (${list});`);
 }
 
+/**
+ * Lleva una reserva a "dentro de 10 minutos" (el operario solo inicia desde 15 minutos antes). Usa la
+ * primera bahía activa sin cruce: con la misma bahía ocupada, tr_booking_bay_overlap rechaza el cambio.
+ */
+function moveBookingToSoon(id, minutes) {
+  for (const bay of sql('SELECT service_bay_id FROM booking.service_bay WHERE deleted_at IS NULL ORDER BY service_bay_id').split(/\s+/).filter(Boolean)) {
+    sql(`UPDATE booking.booking SET service_bay_id = ${bay}, scheduled_start = DATEADD(minute, 10, SYSUTCDATETIME()),
+         scheduled_end = DATEADD(minute, ${10 + minutes}, SYSUTCDATETIME()) WHERE booking_id = ${id}`);
+    const moved = sql(`SELECT CASE WHEN scheduled_start BETWEEN DATEADD(minute, 5, SYSUTCDATETIME()) AND DATEADD(minute, 15, SYSUTCDATETIME()) THEN 1 ELSE 0 END FROM booking.booking WHERE booking_id = ${id}`);
+    if (moved === '1') return;
+  }
+  throw new Error(`no hay una bahía libre para mover la reserva ${id} a dentro de 10 minutos`);
+}
+
 /** Repite check hasta que devuelva algo verdadero o se acabe el tiempo (los eventos son asíncronos). */
 async function waitFor(check, timeoutMs = 15000, everyMs = 1000) {
   const end = Date.now() + timeoutMs;
@@ -98,4 +112,4 @@ function farWeekday(daysAhead = 40) {
   return date.toISOString().slice(0, 10);
 }
 
-module.exports = { env, GATEWAY, ACCOUNTS, sign, api, sql, deleteBookings, waitFor, farWeekday };
+module.exports = { env, GATEWAY, ACCOUNTS, sign, api, sql, deleteBookings, waitFor, farWeekday, moveBookingToSoon };

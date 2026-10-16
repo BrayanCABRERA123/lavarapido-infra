@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { ACCOUNTS, sign, api, sql, deleteBookings, waitFor, farWeekday } = require('./lib');
+const { ACCOUNTS, sign, api, sql, deleteBookings, waitFor, farWeekday, moveBookingToSoon } = require('./lib');
 
 const OPERATOR_USER = Number(process.env.E2E_OPERATOR_ID ?? 50002);
 // comprobante mínimo válido (PNG de 1x1)
@@ -126,8 +126,7 @@ test('flujo completo: cliente → admin → operario → cliente', async (t) => 
   // ---------------------------------------------------------------- operario trabaja
   await t.test('4. el operario inicia y termina el servicio; el cliente recibe los avisos', async () => {
     // la reserva pasa a empezar en 10 minutos (UTC) para poder iniciarla hoy
-    sql(`UPDATE booking.booking SET scheduled_start = DATEADD(minute, 10, SYSUTCDATETIME()),
-         scheduled_end = DATEADD(minute, ${10 + minutes}, SYSUTCDATETIME()) WHERE booking_id = ${state.bookingId}`);
+    moveBookingToSoon(state.bookingId, minutes);
     const assigned = await api('GET', '/operator/services', operator);
     assert.ok(assigned.body.some((s) => s.bookingId === state.bookingId), 'el operario no ve el servicio asignado');
     const start = await api('POST', `/operator/services/${state.bookingId}/start`, operator);
