@@ -1,19 +1,22 @@
 # LavaRapido — Infrastructure
 
 Shared local infrastructure for the LavaRapido microservices: SQL Server, RabbitMQ (domain events,
-ADR-004) and Mailpit; the API Gateway comes later. Every microservice lives in **its own repository**; this repository only
-holds what they share: the database container, the compose file and the secrets template.
+ADR-004) and Mailpit, plus the compose profile that runs the API Gateway and every service in containers. Every
+microservice lives in **its own repository**; this repository only holds what they share: the database container, the
+compose file, the secrets template, the end-to-end tests (`e2e/`) and the production scripts (`deploy/`).
 
 | Service | Repository | Port | Schemas | Status |
 |---|---|---|---|---|
 | `security-service` | `lavarapido-security-service` | 3001 | `security`, `audit` | Implemented |
 | `customer-service` | `lavarapido-customer-service` | 3002 | `customer` | Implemented |
 | `booking-service` | `lavarapido-booking-service` | 3003 | `catalog`, `booking` | Implemented |
-| `operations-service` | — | — | `execution` | Planned |
-| `payment-service` | — | — | `promotion`, `payment` | Planned |
+| `operations-service` | `lavarapido-operation-service` | 3004 | `execution` | Implemented |
+| `payment-service` | `lavarapido-payment-service` (.NET 8) | 3005 | `promotion`, `payment` | Implemented |
 | `notification-service` | `lavarapido-notification-service` | 3006 | `notification` | Implemented |
+| `api-gateway` | `lavarapido-api-gateway` | 8080 | — | Implemented |
 
-The frontend lives in `Front-end-proyecto-web`.
+The web app lives in `Front-end-proyecto-web` and the Android app in `LavadoVehicular-Movil`. The public
+server is described in [`DEPLOY.md`](DEPLOY.md).
 
 ## Folder layout
 
