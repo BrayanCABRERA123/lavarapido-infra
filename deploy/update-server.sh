@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Actualiza el servidor con lo último de GitHub: baja los repos y reconstruye solo lo que cambió.
+#
+#   bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh            (todo)
+#   bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh web        (solo algunos servicios)
+#
+# Docker reutiliza las capas que no cambiaron, así que los servicios sin cambios no se recompilan.
+# Los datos (base de datos, RabbitMQ, certificados) se conservan.
+set -euo pipefail
+
+BRANCH="${BRANCH:-develop}"
+INFRA="$(cd "$(dirname "$0")/.." && pwd)"
+
+echo "== Bajando los repos ($BRANCH)"
+BRANCH="$BRANCH" bash "$INFRA/deploy/setup-server.sh" | grep -E "Actualizando|Clonando|fatal|error" || true
+
+cd "$INFRA"
+COMPOSE=(sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --profile app)
+
+echo "== Construyendo y levantando: ${*:-todos los servicios}"
+"${COMPOSE[@]}" up -d --build "$@"
+
+echo "== Estado"
+"${COMPOSE[@]}" ps --format "table {{.Name}}\t{{.Status}}"
+echo "Listo. Los servicios Java tardan 1-2 minutos en responder después de reiniciar."
