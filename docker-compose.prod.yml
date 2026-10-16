@@ -9,6 +9,10 @@
 # - cada servicio tiene límite de memoria (la JVM usa el 75 % de su límite) y se reinicia solo.
 # Ver DEPLOY.md.
 
+# el gateway reenvía la cabecera Origin del navegador a cada servicio, y cada uno revisa CORS:
+# todos deben aceptar la dirección pública de la web (si no, la web recibe 403 en cada llamada)
+x-public-origin: &public-origin ${PUBLIC_URL:?Set PUBLIC_URL in .env.production}
+
 x-java-limits: &java-limits
   mem_limit: 512m
   restart: unless-stopped
@@ -38,6 +42,7 @@ services:
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      CORS_ALLOWED_ORIGINS: *public-origin
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
       # primer administrador: solo se crea si la base no tiene ninguno (la base empieza vacía)
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
@@ -50,12 +55,14 @@ services:
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      CORS_ALLOWED_ORIGINS: *public-origin
 
   booking-service:
     <<: *java-limits
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      CORS_ALLOWED_ORIGINS: *public-origin
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
 
   operations-service:
@@ -63,6 +70,7 @@ services:
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      CORS_ALLOWED_ORIGINS: *public-origin
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
 
   notification-service:
@@ -70,6 +78,7 @@ services:
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      CORS_ALLOWED_ORIGINS: *public-origin
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
       # enlace del reporte de inspección que llega por correo
       WEB_URL: ${PUBLIC_URL:?Set PUBLIC_URL in .env.production}
@@ -80,13 +89,14 @@ services:
     ports: !reset []
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      CORS_ALLOWED_ORIGINS: *public-origin
 
   api-gateway:
     <<: *java-limits
     ports: !reset []
     environment:
       # la web sale del mismo dominio que /api; la app del celular no usa CORS
-      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:?Set PUBLIC_URL in .env.production}
+      CORS_ALLOWED_ORIGINS: *public-origin
 
   # la web (Angular) servida por nginx, que pasa /api al gateway
   web:
