@@ -70,11 +70,32 @@ Luego `eas build -p android --profile preview` y se instala el APK nuevo.
 
 ## 6. Actualizar después de cambios
 
+Primero se suben los cambios a GitHub (rama `develop`). Luego, en el servidor:
+
 ```bash
-bash ~/setup-server.sh
-cd ~/lavarapido/lavarapido-infra
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --profile app up -d --build
+bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh          # todo
+bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh web      # solo la web
+bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh notification-service security-service
 ```
+
+Baja los repos y reconstruye; lo que no cambió se reutiliza. Los datos se conservan. Desde un
+computador con la llave SSH se puede hacer en un paso:
+
+```bash
+ssh -i ~/.ssh/lavarapido_azure azureuser@IP-DEL-VPS 'bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh'
+```
+
+## 7. Publicar una versión nueva de la app
+
+Desde la carpeta de la app móvil, después de `eas build -p android --profile preview`:
+
+```bash
+npm run publish:apk -- "qué cambió"
+```
+
+Deja el APK en `/app/LavaRapidoVehicular.apk` (botón de la web) y avisa por bandeja y push a quienes
+tienen la app instalada. Para cambios solo de pantallas o lógica no hace falta APK:
+`npm run publish:update -- "qué cambió"` (EAS Update).
 
 ## Qué cambia frente al entorno local (`docker-compose.prod.yml`)
 

@@ -37,3 +37,23 @@ mv "$DIR/.version.json" "$DIR/version.json"
 chmod 644 "$DIR/LavaRapidoVehicular.apk" "$DIR/version.json"
 
 echo "Publicado versionCode $VERSION_CODE ($((SIZE / 1024 / 1024)) MB) en /app/LavaRapidoVehicular.apk"
+
+# aviso por bandeja y push a quienes tienen la app (notification-service anuncia cada versión una
+# sola vez). NOTIFY=0 publica sin avisar. La ruta /internal no sale por el gateway: se llama desde
+# la red interna de Docker con la llave entre servicios, que nunca se muestra.
+if [ "${NOTIFY:-1}" != "0" ]; then
+  ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env.production"
+  KEY=$(grep -E "^INTERNAL_API_KEY=" "$ENV_FILE" | cut -d= -f2-)
+  if [ -z "$KEY" ]; then
+    echo "Sin INTERNAL_API_KEY en .env.production: no se avisó a los usuarios"
+  else
+    printf 'X-Internal-Key: %s\n' "$KEY" > "$DIR/.notify-header"
+    chmod 600 "$DIR/.notify-header"
+    RESULT=$(sudo docker run --rm --network lavarapido_default -v "$DIR/.notify-header:/tmp/h:ro" \
+      curlimages/curl:8.10.1 -s -X POST -H @/tmp/h -H "Content-Type: application/json" \
+      -d "{\"versionCode\": $VERSION_CODE}" http://notification-service:3006/internal/v1/notifications/app-update \
+      || echo "error")
+    rm -f "$DIR/.notify-header"
+    echo "Aviso a los usuarios: $RESULT"
+  fi
+fi
