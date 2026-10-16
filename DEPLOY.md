@@ -41,6 +41,10 @@ nano .env.production
 - Contraseñas y llaves **nuevas** (no las del computador de desarrollo). Para cada llave:
   `openssl rand -base64 48`.
 - Correo: Gmail con contraseña de aplicación (`MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`).
+- **Primer administrador**: `ADMIN_EMAIL` y `ADMIN_PASSWORD`. La base empieza vacía (las cuentas demo
+  como `admin@gmail.com` solo existen en desarrollo) y el registro público solo crea clientes. Al
+  arrancar, security-service crea este administrador si no hay ninguno; en el log sale
+  `First administrator created`. Con él se entra a `/admin` y se crean los operarios.
 
 ## 4. Levantar
 
