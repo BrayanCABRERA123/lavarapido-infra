@@ -1,0 +1,119 @@
+# Producción (un servidor con Docker, ej. un VPS). Se suma a docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --profile app up -d --build
+#
+# Diferencias con el entorno local:
+# - solo Caddy publica puertos (80 y 443): base, RabbitMQ y servicios quedan en la red interna;
+# - Caddy da HTTPS con el dominio (SITE_ADDRESS) y reparte: /api -> gateway, lo demás -> web;
+# - sin perfil dev (Swagger apagado), SQL Server Express, llaves obligatorias, sin Mailpit;
+# - cada servicio tiene límite de memoria (la JVM usa el 75 % de su límite) y se reinicia solo.
+# Ver DEPLOY.md.
+
+x-java-limits: &java-limits
+  mem_limit: 512m
+  restart: unless-stopped
+
+services:
+  sqlserver:
+    ports: !reset []
+    environment:
+      # Express es gratis para producción (Developer es solo para desarrollo)
+      MSSQL_PID: Express
+      MSSQL_MEMORY_LIMIT_MB: "1536"
+    restart: unless-stopped
+
+  rabbitmq:
+    ports: !reset []
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Set RABBITMQ_USERNAME in .env.production}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env.production}
+    restart: unless-stopped
+
+  # en producción los correos salen por Gmail/Brevo: Mailpit no se levanta
+  mailpit:
+    profiles: ["dev-only"]
+
+  security-service:
+    <<: *java-limits
+    ports: !reset []
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
+
+  customer-service:
+    <<: *java-limits
+    ports: !reset []
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  booking-service:
+    <<: *java-limits
+    ports: !reset []
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
+
+  operations-service:
+    <<: *java-limits
+    ports: !reset []
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
+
+  notification-service:
+    <<: *java-limits
+    ports: !reset []
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
+      # enlace del reporte de inspección que llega por correo
+      WEB_URL: ${PUBLIC_URL:?Set PUBLIC_URL in .env.production}
+
+  payment-service:
+    mem_limit: 384m
+    restart: unless-stopped
+    ports: !reset []
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+
+  api-gateway:
+    <<: *java-limits
+    ports: !reset []
+    environment:
+      # la web sale del mismo dominio que /api; la app del celular no usa CORS
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:?Set PUBLIC_URL in .env.production}
+
+  # la web (Angular) servida por nginx, que pasa /api al gateway
+  web:
+    profiles: ["app"]
+    build: ${WEB_CONTEXT:-../Front-end-proyecto-web}
+    image: lavarapido/web:local
+    container_name: lavarapido-web
+    depends_on:
+      - api-gateway
+    mem_limit: 64m
+    restart: unless-stopped
+
+  # puerta de entrada pública: HTTPS automático (Let's Encrypt) con el dominio de SITE_ADDRESS.
+  # Sin dominio, SITE_ADDRESS=:80 sirve por http con la IP del servidor.
+  caddy:
+    profiles: ["app"]
+    image: caddy:2-alpine
+    container_name: lavarapido-caddy
+    depends_on:
+      - web
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 64m
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:
