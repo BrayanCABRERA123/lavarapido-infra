@@ -1,0 +1,16 @@
+# Entrada pública de LavaRápido en producción (docker-compose.prod.yml).
+# SITE_ADDRESS: el dominio (ej. vehiclecarwash.com) para HTTPS automático, o :80 sin dominio.
+{$SITE_ADDRESS}
+
+encode gzip
+
+# la app móvil y la web llaman /api/v1/...: van directo al API Gateway
+handle /api/* {
+	reverse_proxy api-gateway:8080
+}
+
+# todo lo demás es la web (nginx con el build de Angular). El actuator del gateway queda
+# fuera: /actuator no empieza por /api, así que nunca llega al gateway
+handle {
+	reverse_proxy web:80
+}
