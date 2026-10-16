@@ -23,3 +23,7 @@ Thumbs.db
 # Pruebas e2e: dependencias y capturas
 e2e/node_modules/
 e2e/shots/
+
+# APK y versión publicados en el servidor (los escribe deploy/publish-apk.sh)
+deploy/downloads/*.apk
+deploy/downloads/version.json

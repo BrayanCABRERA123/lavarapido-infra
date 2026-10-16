@@ -9,6 +9,20 @@ handle /api/* {
 	reverse_proxy api-gateway:8080
 }
 
+# descargas públicas: el APK de la app Android y su version.json (deploy/downloads, ver README).
+# Dirección fija: /app/LavaRapidoVehicular.apk
+handle_path /app/* {
+	root * /srv/downloads
+	# el celular lo reconoce como app instalable (Go no conoce la extensión .apk)
+	@apk path *.apk
+	header @apk Content-Type application/vnd.android.package-archive
+	header @apk Content-Disposition "attachment; filename=\"LavaRapidoVehicular.apk\""
+	# la versión publicada siempre se lee fresca (la app y la web la consultan para avisar)
+	@version path /version.json
+	header @version Cache-Control "no-cache"
+	file_server
+}
+
 # todo lo demás es la web (nginx con el build de Angular). El actuator del gateway queda
 # fuera: /actuator no empieza por /api, así que nunca llega al gateway
 handle {

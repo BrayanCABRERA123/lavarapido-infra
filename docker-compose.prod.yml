@@ -124,6 +124,8 @@ services:
       - "443:443"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # APK de la app y su version.json, servidos en /app/ (los escribe deploy/publish-apk.sh)
+      - ./deploy/downloads:/srv/downloads:ro
       - caddy-data:/data
       - caddy-config:/config
     mem_limit: 64m
