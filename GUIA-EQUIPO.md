@@ -17,7 +17,7 @@ Cada pieza vive en **su propio repositorio**:
 | `lavarapido-customer-service` | Clientes, vehículos, puntos (copia) | Activo |
 | `lavarapido-booking-service` | Catálogo, precios, horarios, bahías, reservas | Activo |
 | `lavarapido-operation-service` | Operarios, disponibilidad, asignación, ejecución, calificaciones | Activo |
-| `lavarapido-payment-service` | Cuentas de pago con QR, pagos manuales con comprobante, revisión del admin (.NET) | Activo (promociones y puntos pendientes) |
+| `lavarapido-payment-service` | Cuentas de pago con QR, pagos con comprobante, revisión del admin, promociones y puntos (.NET) | Activo |
 | `lavarapido-notification-service` | Notificaciones: bandeja, push al celular, mensajes del admin; escucha eventos de RabbitMQ | Activo |
 | `lavarapido-api-gateway` | Spring Cloud Gateway: punto de entrada único en el 8080, enruta a cada servicio (ADR-005) | Activo |
 
@@ -188,18 +188,22 @@ Mínimo 8 caracteres, una mayúscula, un número y un carácter especial (ej. `L
 
 | Conectado (datos reales) | Todavía con datos de prueba |
 |---|---|
-| Login, registro, recuperar contraseña | Promociones y puntos de fidelidad (payment-service todavía no los tiene) |
-| Cambiar contraseña, editar perfil y preferencias | Contactos del "Centro de ayuda" (WhatsApp, línea, correo): siguen quemados en el front |
+| Login, registro, recuperar contraseña | Reportes: se calculan en el navegador con las reservas y los pagos reales |
+| Cambiar contraseña, editar perfil y preferencias | Matriz de permisos por rol: se guarda, pero todavía no cambia lo que hace cada rol (ADR-015) |
 | Cerrar sesión, protección de rutas por rol | |
 | Vehículos (customer-service) | |
 | Reservas, catálogo, horarios, bahías (booking-service) | |
 | Operarios, asignación, ejecución, calificaciones (operation-service) | |
-| Pagos: cuentas con QR, reporte de comprobante, revisión del admin (payment-service) | |
+| Pagos: cuentas con QR, reporte de comprobante, revisión del admin, reembolsos (payment-service) | |
+| Promociones, cupones y puntos de fidelidad (payment-service) | |
+| Datos del negocio y contactos del "Centro de ayuda" (booking-service) | |
+| Informes de inspección con fotos y enlace público (operation-service) | |
 | Notificaciones e historial del cliente | |
 | Todo el admin (reservas, operarios, pagos, horarios, catálogo, promociones, reportes, usuarios) | |
 | Todo el operario | |
 
-Las pantallas pendientes se conectan a medida que existan sus microservicios (tabla de la sección 1).
+Todas las pantallas leen y guardan en el backend; lo de la columna derecha son los dos casos que todavía
+se resuelven en el navegador.
 
 ---
 
