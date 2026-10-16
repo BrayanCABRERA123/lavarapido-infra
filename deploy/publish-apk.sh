@@ -47,13 +47,17 @@ if [ "${NOTIFY:-1}" != "0" ]; then
   if [ -z "$KEY" ]; then
     echo "Sin INTERNAL_API_KEY en .env.production: no se avisó a los usuarios"
   else
-    printf 'X-Internal-Key: %s\n' "$KEY" > "$DIR/.notify-header"
-    chmod 600 "$DIR/.notify-header"
-    RESULT=$(sudo docker run --rm --network lavarapido_default -v "$DIR/.notify-header:/tmp/h:ro" \
+    # la llave va en un archivo dentro de una carpeta privada (700): el archivo debe ser legible (644)
+    # porque curl corre en el contenedor con otro usuario, pero nadie más del servidor llega a él
+    PRIVATE=$(mktemp -d)
+    chmod 700 "$PRIVATE"
+    printf 'X-Internal-Key: %s\n' "$KEY" > "$PRIVATE/header"
+    chmod 644 "$PRIVATE/header"
+    RESULT=$(sudo docker run --rm --network lavarapido_default -v "$PRIVATE/header:/tmp/h:ro" \
       curlimages/curl:8.10.1 -s -X POST -H @/tmp/h -H "Content-Type: application/json" \
       -d "{\"versionCode\": $VERSION_CODE}" http://notification-service:3006/internal/v1/notifications/app-update \
       || echo "error")
-    rm -f "$DIR/.notify-header"
+    rm -rf "$PRIVATE"
     echo "Aviso a los usuarios: $RESULT"
   fi
 fi
