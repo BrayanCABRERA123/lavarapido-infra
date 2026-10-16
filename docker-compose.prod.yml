@@ -39,6 +39,11 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
+      # primer administrador: solo se crea si la base no tiene ninguno (la base empieza vacía)
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_FIRST_NAME: ${ADMIN_FIRST_NAME:-}
+      ADMIN_LAST_NAME: ${ADMIN_LAST_NAME:-}
 
   customer-service:
     <<: *java-limits
