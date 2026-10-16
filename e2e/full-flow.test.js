@@ -68,8 +68,13 @@ test('flujo completo: cliente → admin → operario → cliente', async (t) => 
   assert.equal(free.status, 200);
   const operatorView = (await api('GET', '/operator/services', operator));
   assert.equal(operatorView.status, 200, 'la cuenta del operario responde');
-  const mineAsOperator = free.body.find((o) => o.firstName && o.operatorId === 3) ?? free.body[0];
-  assert.ok(mineAsOperator, `nadie libre el ${date} a las 09:00`);
+  // se elige al operario de la cuenta de prueba (E2E_OPERATOR_ID), no al primero libre: si hay más
+  // operarios con turno, la reserva tiene que quedar con el que luego la inicia y la termina
+  const roster = await api('GET', '/admin/operators', admin);
+  const myOperatorId = roster.body.find?.((o) => o.userId === OPERATOR_USER)?.id;
+  assert.ok(myOperatorId, `la cuenta ${OPERATOR_USER} no es operario: revisa E2E_OPERATOR_ID`);
+  const mineAsOperator = free.body.find((o) => o.operatorId === myOperatorId);
+  assert.ok(mineAsOperator, `el operario de prueba no está libre el ${date} a las 09:00: revisa sus turnos`);
 
   const booking = await api('POST', '/bookings', client,
     { vehicleId: vehicle.id, serviceIds: [service.id], date, time: '09:00', preferredOperatorId: mineAsOperator.operatorId });
