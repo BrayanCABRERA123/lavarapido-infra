@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { ACCOUNTS, sign, api, sql, deleteBookings, waitFor, farWeekday } = require('./lib');
+const { ACCOUNTS, sign, api, sql, deleteBookings, waitFor, farWeekday, moveBookingToSoon } = require('./lib');
 
 const OPERATOR_USER = Number(process.env.E2E_OPERATOR_ID ?? 50002);
 // comprobante mínimo válido (PNG de 1x1)
@@ -68,8 +68,13 @@ test('flujo completo: cliente → admin → operario → cliente', async (t) => 
   assert.equal(free.status, 200);
   const operatorView = (await api('GET', '/operator/services', operator));
   assert.equal(operatorView.status, 200, 'la cuenta del operario responde');
-  const mineAsOperator = free.body.find((o) => o.firstName && o.operatorId === 3) ?? free.body[0];
-  assert.ok(mineAsOperator, `nadie libre el ${date} a las 09:00`);
+  // se elige al operario de la cuenta de prueba (E2E_OPERATOR_ID), no al primero libre: si hay más
+  // operarios con turno, la reserva tiene que quedar con el que luego la inicia y la termina
+  const roster = await api('GET', '/admin/operators', admin);
+  const myOperatorId = roster.body.find?.((o) => o.userId === OPERATOR_USER)?.id;
+  assert.ok(myOperatorId, `la cuenta ${OPERATOR_USER} no es operario: revisa E2E_OPERATOR_ID`);
+  const mineAsOperator = free.body.find((o) => o.operatorId === myOperatorId);
+  assert.ok(mineAsOperator, `el operario de prueba no está libre el ${date} a las 09:00: revisa sus turnos`);
 
   const booking = await api('POST', '/bookings', client,
     { vehicleId: vehicle.id, serviceIds: [service.id], date, time: '09:00', preferredOperatorId: mineAsOperator.operatorId });
@@ -121,8 +126,7 @@ test('flujo completo: cliente → admin → operario → cliente', async (t) => 
   // ---------------------------------------------------------------- operario trabaja
   await t.test('4. el operario inicia y termina el servicio; el cliente recibe los avisos', async () => {
     // la reserva pasa a empezar en 10 minutos (UTC) para poder iniciarla hoy
-    sql(`UPDATE booking.booking SET scheduled_start = DATEADD(minute, 10, SYSUTCDATETIME()),
-         scheduled_end = DATEADD(minute, ${10 + minutes}, SYSUTCDATETIME()) WHERE booking_id = ${state.bookingId}`);
+    moveBookingToSoon(state.bookingId, minutes);
     const assigned = await api('GET', '/operator/services', operator);
     assert.ok(assigned.body.some((s) => s.bookingId === state.bookingId), 'el operario no ve el servicio asignado');
     const start = await api('POST', `/operator/services/${state.bookingId}/start`, operator);
