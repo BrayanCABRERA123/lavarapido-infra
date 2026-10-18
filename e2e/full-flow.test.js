@@ -116,6 +116,8 @@ test('flujo completo: cliente → admin → operario → cliente', async (t) => 
     const mine = await api('GET', '/payments/me', client);
     assert.equal(mine.body.find((p) => p.id === state.paymentIds[0])?.status, 'APPROVED');
     assert.ok(await waitForNotice(client, 'PAYMENT_CONFIRMED'), 'aviso de pago aprobado');
+    // los puntos salen del servicio (0 = no suma): solo se exigen si el servicio los da
+    if (!(service.loyaltyPoints > 0)) return;
     const points = await waitFor(async () => {
       const balance = await api('GET', '/loyalty/balance', client);
       return balance.body.points > Number(state.pointsBefore) ? balance.body.points : null;
