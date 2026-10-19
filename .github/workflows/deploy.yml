@@ -1,0 +1,73 @@
+# Botón "Run workflow" para actualizar el servidor de Azure con lo último de develop.
+# La VM tiene que estar encendida (se prende desde el portal). La llave AZURE_SSH_KEY solo puede
+# ejecutar deploy/ci-deploy.sh en el servidor: no abre una terminal ni lee nada más.
+name: Desplegar en Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Servicios separados por espacio (vacío = todos). Ej: web payment-service'
+        required: false
+        default: ''
+
+# un despliegue a la vez; el siguiente espera en vez de cancelar al que va
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  HOST: 64.236.160.129
+  SITE: https://lavarapidovehicular.northcentralus.cloudapp.azure.com
+  # llave pública del servidor: así solo se conecta a esa máquina
+  KNOWN_HOST: 64.236.160.129 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAT96tWKlGwBAtTH+0Q8obphc8LmnSm09zefn+ypgpdK
+
+jobs:
+  deploy:
+    name: Actualizar servidor
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: ¿La VM está encendida?
+        run: |
+          if ! timeout 20 bash -c "</dev/tcp/$HOST/22"; then
+            echo "::error::La VM no responde. Préndela en el portal de Azure (vehiclecarwash-vm → Iniciar), espera 2 minutos y vuelve a correr este workflow."
+            exit 1
+          fi
+
+      - name: Preparar la llave
+        env:
+          SSH_KEY: ${{ secrets.AZURE_SSH_KEY }}
+        run: |
+          if [ -z "$SSH_KEY" ]; then
+            echo "::error::Falta el secreto AZURE_SSH_KEY (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOST" > ~/.ssh/known_hosts
+
+      - name: Actualizar
+        env:
+          SERVICES: ${{ inputs.services }}
+        run: ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "azureuser@$HOST" "deploy $SERVICES"
+
+      - name: Comprobar que responde
+        run: |
+          # los servicios Java tardan 1-2 minutos en arrancar después de reconstruirse
+          for i in $(seq 1 30); do
+            api=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/api/v1/catalog/services" || true)
+            web=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/" || true)
+            if [ "$api" = 200 ] && [ "$web" = 200 ]; then
+              echo "Web y API responden 200"
+              exit 0
+            fi
+            echo "Esperando a los servicios (web $web, api $api)..."
+            sleep 10
+          done
+          echo "::error::El servidor se actualizó pero la web o la API no responden después de 5 minutos."
+          exit 1
