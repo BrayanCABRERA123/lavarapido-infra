@@ -40,20 +40,37 @@ if [ "$(swapon --show | wc -l)" -eq 0 ]; then
   grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
 fi
 
-mkdir -p "$ROOT"
-cd "$ROOT"
-for url in "${REPOS[@]}"; do
-  name="$(basename "$url" .git)"
+sync_repo() {
+  local url="$1" name="$2"
   if [ -d "$name/.git" ]; then
-    echo "Actualizando $name ($BRANCH)"
-    git -C "$name" fetch --quiet origin
-    git -C "$name" checkout --quiet "$BRANCH"
-    git -C "$name" pull --quiet --ff-only origin "$BRANCH"
+    git -C "$name" fetch --quiet origin &&
+      git -C "$name" checkout --quiet "$BRANCH" &&
+      git -C "$name" pull --quiet --ff-only origin "$BRANCH"
   else
-    echo "Clonando $name ($BRANCH)"
     git clone --quiet --branch "$BRANCH" "$url" "$name"
   fi
+}
+
+mkdir -p "$ROOT"
+cd "$ROOT"
+# si un repo falla (p. ej. un corte de red con GitHub) se reintenta y se sigue con los demás;
+# al final se listan los que fallaron y el script termina con error para que nadie despliegue a medias
+FAILED=()
+for url in "${REPOS[@]}"; do
+  name="$(basename "$url" .git)"
+  if [ -d "$name/.git" ]; then echo "Actualizando $name ($BRANCH)"; else echo "Clonando $name ($BRANCH)"; fi
+  if ! sync_repo "$url" "$name"; then
+    echo "  error con $name, reintentando en 5 s..."
+    sleep 5
+    sync_repo "$url" "$name" || { echo "  error: $name no se pudo actualizar"; FAILED+=("$name"); }
+  fi
 done
+
+if [ "${#FAILED[@]}" -gt 0 ]; then
+  echo
+  echo "error: no se actualizaron: ${FAILED[*]}"
+  exit 1
+fi
 
 echo
 echo "Listo en $ROOT. Siguiente paso (ver lavarapido-infra/DEPLOY.md):"

@@ -12,7 +12,11 @@ BRANCH="${BRANCH:-develop}"
 INFRA="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "== Bajando los repos ($BRANCH)"
-BRANCH="$BRANCH" bash "$INFRA/deploy/setup-server.sh" | grep -E "Actualizando|Clonando|fatal|error" || true
+# si algún repo no se pudo bajar no se construye nada: sería desplegar una mezcla de versiones
+if ! BRANCH="$BRANCH" bash "$INFRA/deploy/setup-server.sh" | grep -E "Actualizando|Clonando|fatal|error"; then
+  echo "No se actualizó el servidor: revisa el error de arriba y vuelve a correr este script."
+  exit 1
+fi
 
 cd "$INFRA"
 COMPOSE=(sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --profile app)
