@@ -85,6 +85,41 @@ computador con la llave SSH se puede hacer en un paso:
 ssh -i ~/.ssh/lavarapido_azure azureuser@IP-DEL-VPS 'bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh'
 ```
 
+### Desde GitHub (sin SSH)
+
+Con la VM encendida: en este repo, **Actions → Desplegar en Azure → Run workflow**. En
+*Servicios* se deja vacío para actualizar todo o se escriben los nombres (`web payment-service`).
+Al final comprueba que la web y la API respondan 200.
+
+Usa una llave propia de GitHub, distinta a la de las personas, que en el servidor solo puede
+ejecutar `deploy/ci-deploy.sh` (valida los nombres y no deja correr dos actualizaciones a la vez).
+Se configura una vez:
+
+1. En un computador: `ssh-keygen -t ed25519 -N "" -C github-actions-deploy -f ~/.ssh/lavarapido_github_deploy`.
+2. En el servidor, una línea nueva en `~/.ssh/authorized_keys` con la parte pública:
+   `restrict,command="bash /home/azureuser/lavarapido/lavarapido-infra/deploy/ci-deploy.sh" ssh-ed25519 AAAA… github-actions-deploy`
+3. En GitHub (este repo): **Settings → Secrets and variables → Actions → New repository secret**,
+   nombre `AZURE_SSH_KEY`, valor: el contenido completo de `~/.ssh/lavarapido_github_deploy` (la
+   parte privada, sin `.pub`).
+
+Para revocarla basta con borrar esa línea de `authorized_keys`. Si la VM cambia (otra IP u otro
+servidor), hay que actualizar `HOST` y `KNOWN_HOST` en `.github/workflows/deploy.yml`.
+
+## Integración continua (GitHub Actions)
+
+Cada repo tiene `.github/workflows/ci.yml`, que corre en cada push o pull request a `develop` y
+`main` (y a mano con *Run workflow*):
+
+| Repo | Qué revisa |
+|---|---|
+| security, customer, booking, operations, notification, api-gateway | `./mvnw verify` (compila y corre las pruebas, Java 21) |
+| payment-service | `dotnet build` y `dotnet test` (.NET 8; las de integración se omiten sin SQL Server) |
+| Front-end-proyecto-web | Compilación de producción y `ng test` |
+| LavadoVehicular-Movil | `tsc --noEmit` (el APK se sigue generando con EAS) |
+| lavarapido-infra | Sintaxis y `shellcheck` de `deploy/*.sh`, `docker compose config` y sintaxis de `e2e/` |
+
+El resultado aparece como ✓ o ✗ junto a cada commit en GitHub.
+
 ## 7. Publicar una versión nueva de la app
 
 Desde la carpeta de la app móvil, después de `eas build -p android --profile preview`:
@@ -112,4 +147,4 @@ tienen la app instalada. Para cambios solo de pantallas o lógica no hace falta 
 
 - Usuario propio de base de datos en vez de `sa`.
 - Copias de seguridad del volumen `sqlserver-data`.
-- CI que pruebe y construya las imágenes antes de desplegar.
+- Construir las imágenes en CI y publicarlas en un registro, para no compilar en el servidor.
