@@ -1,0 +1,42 @@
+# Revisa los scripts de despliegue, los archivos de Docker Compose y las pruebas e2e en cada push o
+# pull request a develop/main. No levanta servicios: solo que todo sea válido.
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Revisar configuración
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # valores de relleno: docker compose exige que existan para validar el archivo
+      DB_PASSWORD: ci-placeholder
+      JWT_SECRET: ci-placeholder
+      INTERNAL_API_KEY: ci-placeholder
+      RABBITMQ_USERNAME: ci-placeholder
+      RABBITMQ_PASSWORD: ci-placeholder
+      PUBLIC_URL: https://example.org
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scripts de despliegue
+        run: |
+          for f in deploy/*.sh; do bash -n "$f" && echo "ok $f"; done
+          shellcheck --severity=error deploy/*.sh
+
+      - name: Docker Compose (local y producción)
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app config --quiet
+
+      - name: Pruebas e2e (sintaxis)
+        run: for f in e2e/*.js; do node --check "$f"; done
