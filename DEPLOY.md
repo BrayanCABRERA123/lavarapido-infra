@@ -129,15 +129,33 @@ en `~/lavarapido/backups/` (se guardan los últimos 14). Corre solo en tres mome
 - 5 minutos después de encender la VM;
 - todos los días a las 23:00 UTC (6 p. m. en Colombia), si la VM está encendida.
 
-`setup-server.sh` programa los dos últimos en el `crontab` de `azureuser`; el historial queda en
-`~/lavarapido/backups/backup.log`. La base usa el modelo de recuperación `SIMPLE` (lo pone
-`db-init`): con respaldos completos no hacen falta respaldos del registro de transacciones.
+`setup-server.sh` programa los dos últimos en el `crontab` de `azureuser` y, después de cada uno,
+`deploy/verify-backup.sh`: restaura el último respaldo como `LavaRapido_verificacion`, revisa que
+tenga las tablas y se pueda leer, y la borra. Así se sabe cada día que los respaldos sirven, sin
+tocar la base real. La base usa el modelo de recuperación `SIMPLE` (lo pone `db-init`): con
+respaldos completos no hacen falta respaldos del registro de transacciones.
+
+Las restauraciones nunca son automáticas: volver a un respaldo borra lo que pasó después, así
+que siempre lo decide una persona.
 
 ```bash
 bash ~/lavarapido/lavarapido-infra/deploy/backup-db.sh                       # respaldar ya
+bash ~/lavarapido/lavarapido-infra/deploy/verify-backup.sh                   # probar que el último se puede restaurar
 bash ~/lavarapido/lavarapido-infra/deploy/restore-db.sh <archivo.bak.gz> --as LavaRapido_prueba   # revisar un respaldo sin tocar la base
 bash ~/lavarapido/lavarapido-infra/deploy/restore-db.sh <archivo.bak.gz>     # volver la base a ese respaldo (pide escribir RESTAURAR)
 ```
+
+**Bitácora:** `~/lavarapido/backups/backup.log` anota cada respaldo, verificación y restauración,
+también las canceladas o fallidas, con la fecha (UTC), el resultado y quién la hizo:
+
+```
+2026-10-21 06:12:05 UTC | RESPALDO | OK | LavaRapido-20261021-061204.bak.gz (1.4M) | azureuser
+2026-10-21 06:12:08 UTC | VERIFICACIÓN | OK | LavaRapido-20261021-061204.bak.gz: 69 tablas, 4 usuarios, 2 reservas | azureuser
+2026-10-21 06:11:16 UTC | RESTAURACIÓN | CANCELADA | LavaRapido-20261021-061111.bak.gz -> LavaRapido | azureuser
+```
+
+Se lee con `tail -20 ~/lavarapido/backups/backup.log`; para ver solo los problemas,
+`grep FALLÓ ~/lavarapido/backups/backup.log`.
 
 Los respaldos viven en el mismo disco de la VM: sirven ante un error o una migración mala, no si
 se pierde la VM. Para guardar una copia afuera, desde el PC:
