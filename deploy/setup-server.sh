@@ -40,20 +40,20 @@ if [ "$(swapon --show | wc -l)" -eq 0 ]; then
   grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
 fi
 
-# respaldos automáticos de la base (deploy/backup-db.sh). La VM se enciende a demanda, así que
-# además del diario (23:00 UTC = 6 p. m. en Colombia) se respalda 5 minutos después de cada
-# arranque; update-server.sh también respalda antes de actualizar
-if ! crontab -l 2>/dev/null | grep -q 'lavarapido-backup'; then
-  echo "Programando los respaldos de la base..."
-  mkdir -p "$ROOT/backups" && chmod 700 "$ROOT/backups"
-  backup="bash $ROOT/lavarapido-infra/deploy/backup-db.sh >> $ROOT/backups/backup.log 2>&1"
-  # crontab -l falla si todavía no hay ninguna tarea: no es un error
-  { crontab -l 2>/dev/null || true
-    echo "# lavarapido-backup: respaldo de la base al arrancar la VM y cada día"
-    echo "@reboot sleep 300 && $backup"
-    echo "0 23 * * * $backup"
-  } | crontab -
-fi
+# respaldos automáticos de la base (deploy/backup-db.sh) y prueba de que se pueden restaurar
+# (deploy/verify-backup.sh). La VM se enciende a demanda, así que además del diario (23:00 UTC =
+# 6 p. m. en Colombia) se respalda 5 minutos después de cada arranque; update-server.sh también
+# respalda antes de actualizar. Las líneas se reescriben en cada corrida para que un cambio aquí
+# llegue al servidor. Los scripts anotan el resultado en backups/backup.log; los errores
+# inesperados (stderr) también van ahí.
+mkdir -p "$ROOT/backups" && chmod 700 "$ROOT/backups"
+job="bash $ROOT/lavarapido-infra/deploy/backup-db.sh > /dev/null 2>> $ROOT/backups/backup.log && bash $ROOT/lavarapido-infra/deploy/verify-backup.sh > /dev/null 2>> $ROOT/backups/backup.log"
+# crontab -l falla si todavía no hay ninguna tarea: no es un error
+{ crontab -l 2>/dev/null | grep -vE 'lavarapido-backup|deploy/backup-db\.sh' || true
+  echo "# lavarapido-backup: respaldo y verificación de la base al arrancar la VM y cada día"
+  echo "@reboot sleep 300 && $job # lavarapido-backup"
+  echo "0 23 * * * $job # lavarapido-backup"
+} | crontab -
 
 sync_repo() {
   local url="$1" name="$2"
