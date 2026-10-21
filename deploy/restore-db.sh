@@ -8,7 +8,10 @@
 #   bash restore-db.sh <archivo> --as LavaRapido_prueba
 #       la restaura con otro nombre, sin tocar la base real (para revisar o probar un respaldo).
 #       Se borra con: DROP DATABASE [LavaRapido_prueba]
-set -euo pipefail
+#
+# Cada restauración (o su cancelación o falla) queda anotada en ~/lavarapido/backups/backup.log.
+# -E: la trampa ERR también salta si el error ocurre dentro de una función (sql)
+set -Eeuo pipefail
 
 INFRA="$(cd "$(dirname "$0")/.." && pwd)"
 DB="${DB_NAME:-LavaRapido}"
@@ -24,6 +27,12 @@ if [ "${2:-}" = "--as" ]; then
   [ "$target" != "$DB" ] || { echo "Para reemplazar $DB no uses --as"; exit 1; }
 fi
 
+LOG="${BACKUP_DIR:-$HOME/lavarapido/backups}/backup.log"
+# bitácora: fecha UTC | acción | resultado | detalle | quién
+log() { printf '%s | RESTAURACIÓN | %s | %s | %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$1" "$2" "${SUDO_USER:-$USER}" >> "$LOG"; }
+what="$(basename "$archive") -> $target"
+trap 'log FALLÓ "$what (error en la línea $LINENO)"' ERR
+
 PASSWORD="$(grep '^DB_PASSWORD=' "$INFRA/.env.production" | cut -d= -f2-)"
 sql() {
   sudo docker exec -e SQLCMDPASSWORD="$PASSWORD" "$CONTAINER" \
@@ -37,7 +46,7 @@ SERVICES=(security-service customer-service booking-service operations-service
 if [ "$target" = "$DB" ]; then
   echo "Esto REEMPLAZA la base $DB con $(basename "$archive"). Lo que se haya hecho después de ese respaldo se pierde."
   read -r -p "Escribe RESTAURAR para continuar: " answer
-  [ "$answer" = "RESTAURAR" ] || { echo "Cancelado."; exit 1; }
+  [ "$answer" = "RESTAURAR" ] || { log CANCELADA "$what"; echo "Cancelado."; exit 1; }
   echo "== Respaldo de cómo está ahora (por si hay que volver)"
   bash "$INFRA/deploy/backup-db.sh"
 fi
@@ -48,6 +57,8 @@ sudo docker exec "$CONTAINER" mkdir -p "$INSIDE"
 sudo docker cp "/tmp/$file" "$CONTAINER:$INSIDE/$file"
 rm -f "/tmp/$file"
 sudo docker exec -u 0 "$CONTAINER" chown mssql "$INSIDE/$file"
+# el archivo temporal dentro del contenedor se borra siempre, también si algo falla
+trap 'sudo docker exec "$CONTAINER" rm -f "$INSIDE/$file" > /dev/null 2>&1 || true' EXIT
 
 if [ "$target" = "$DB" ]; then
   echo "== Deteniendo los servicios"
@@ -58,6 +69,7 @@ if [ "$target" = "$DB" ]; then
     sql "ALTER DATABASE [$DB] SET MULTI_USER" || true
     sudo docker exec "$CONTAINER" rm -f "$INSIDE/$file"
     "${COMPOSE[@]}" start "${SERVICES[@]}"
+    log FALLÓ "$what (la base sigue como estaba)"
     echo "error: no se pudo restaurar; la base sigue como estaba"
     exit 1
   fi
@@ -69,6 +81,8 @@ else
        MOVE N'${DB}_log' TO N'/var/opt/mssql/data/${target}_log.ldf'"
 fi
 sudo docker exec "$CONTAINER" rm -f "$INSIDE/$file"
+
+log OK "$what"
 
 if [ "$target" = "$DB" ]; then
   echo "== Levantando los servicios"
