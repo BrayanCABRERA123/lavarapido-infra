@@ -142,6 +142,15 @@ tienen la app instalada. Para cambios solo de pantallas o lógica no hace falta 
 | Mailpit | Gmail / SMTP real |
 | `INTERNAL_API_KEY`, usuario de RabbitMQ opcionales | Obligatorios (no arranca sin ellos) |
 | Sin límite de memoria | 512 MB por servicio Java, reinicio automático |
+| Logs sin tope | Hasta 3 archivos de 10 MB por contenedor |
+| Sin chequeo de salud en los servicios | Cada servicio y la web con *healthcheck* (`docker compose ps` muestra `healthy` o `unhealthy`; Docker no reinicia solo un `unhealthy`) |
+| Sin encabezados de seguridad | Caddy agrega HSTS, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` y un CSP para la web |
+
+**Si la web cambia lo que carga de afuera** (otra fuente, un CDN, un script), hay que agregar ese
+dominio al `Content-Security-Policy` de `deploy/Caddyfile`; si no, el navegador lo bloquea. La
+huella `sha256-…` del CSP autoriza solo el `onload="this.media='all'"` que Angular pone al
+compilar; si Angular lo cambia, la página queda sin estilos y la consola del navegador muestra la
+huella nueva que hay que poner.
 
 ## Pendiente para un despliegue más robusto
 

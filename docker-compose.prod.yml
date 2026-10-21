@@ -17,6 +17,23 @@ x-java-limits: &java-limits
   mem_limit: 512m
   restart: unless-stopped
 
+# logs con tope: hasta 3 archivos de 10 MB por contenedor (sin esto crecen hasta llenar el disco)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# salud de cada servicio: GET /actuator/health tiene que decir UP. Las imágenes (Temurin y .NET)
+# no traen curl ni wget, así que se pregunta con bash (/dev/tcp). Docker Compose no reinicia un
+# contenedor "unhealthy": el estado se ve en docker compose ps, Portainer y update-server.sh.
+x-health-timing: &health-timing
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  # los servicios Java tardan 1-2 minutos en arrancar en la VM
+  start_period: 150s
+
 services:
   sqlserver:
     ports: !reset []
@@ -25,6 +42,7 @@ services:
       MSSQL_PID: Express
       MSSQL_MEMORY_LIMIT_MB: "1536"
     restart: unless-stopped
+    logging: *logging
 
   rabbitmq:
     ports: !reset []
@@ -32,6 +50,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Set RABBITMQ_USERNAME in .env.production}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env.production}
     restart: unless-stopped
+    logging: *logging
 
   # en producción los correos salen por Gmail/Brevo: Mailpit no se levanta
   mailpit:
@@ -39,6 +58,10 @@ services:
 
   security-service:
     <<: *java-limits
+    logging: *logging
+    healthcheck:
+      <<: *health-timing
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3001 && printf 'GET /actuator/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -52,6 +75,10 @@ services:
 
   customer-service:
     <<: *java-limits
+    logging: *logging
+    healthcheck:
+      <<: *health-timing
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3002 && printf 'GET /actuator/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -59,6 +86,10 @@ services:
 
   booking-service:
     <<: *java-limits
+    logging: *logging
+    healthcheck:
+      <<: *health-timing
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3003 && printf 'GET /actuator/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -67,6 +98,10 @@ services:
 
   operations-service:
     <<: *java-limits
+    logging: *logging
+    healthcheck:
+      <<: *health-timing
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3004 && printf 'GET /actuator/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -75,6 +110,10 @@ services:
 
   notification-service:
     <<: *java-limits
+    logging: *logging
+    healthcheck:
+      <<: *health-timing
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3006 && printf 'GET /actuator/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -86,6 +125,10 @@ services:
   payment-service:
     mem_limit: 384m
     restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      <<: *health-timing
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3005 && printf 'GET /actuator/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
     ports: !reset []
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -93,6 +136,10 @@ services:
 
   api-gateway:
     <<: *java-limits
+    logging: *logging
+    healthcheck:
+      <<: *health-timing
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
     ports: !reset []
     environment:
       # la web sale del mismo dominio que /api; la app del celular no usa CORS
@@ -108,6 +155,11 @@ services:
       - api-gateway
     mem_limit: 64m
     restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      <<: *health-timing
+      start_period: 20s
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
 
   # puerta de entrada pública: HTTPS automático (Let's Encrypt) con el dominio de SITE_ADDRESS.
   # Sin dominio, SITE_ADDRESS=:80 sirve por http con la IP del servidor.
@@ -130,6 +182,7 @@ services:
       - caddy-config:/config
     mem_limit: 64m
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   caddy-data:
