@@ -21,6 +21,15 @@ fi
 cd "$INFRA"
 COMPOSE=(sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --profile app)
 
+# antes de cambiar nada se respalda la base: si una migración nueva sale mal, se puede volver
+if sudo docker ps --format '{{.Names}}' | grep -qx lavarapido-sqlserver; then
+  echo "== Respaldo de la base antes de actualizar"
+  if ! bash "$INFRA/deploy/backup-db.sh"; then
+    echo "No se actualizó el servidor: el respaldo falló (revisa el error de arriba)."
+    exit 1
+  fi
+fi
+
 echo "== Construyendo y levantando: ${*:-todos los servicios}"
 "${COMPOSE[@]}" up -d --build "$@"
 
