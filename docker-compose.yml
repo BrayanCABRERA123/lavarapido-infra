@@ -42,7 +42,9 @@ services:
     entrypoint:
       - /bin/bash
       - -c
-      - /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -Q "IF DB_ID('$$DB_NAME') IS NULL CREATE DATABASE [$$DB_NAME]"
+      # SIMPLE: el registro de transacciones no crece sin fin; los respaldos son completos
+      # (deploy/backup-db.sh), así que no hacen falta respaldos del registro
+      - /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -Q "IF DB_ID('$$DB_NAME') IS NULL CREATE DATABASE [$$DB_NAME]; ALTER DATABASE [$$DB_NAME] SET RECOVERY SIMPLE"
     restart: "no"
 
   # Tablas de payment-service (esquemas payment y promotion). El servicio es .NET y no aplica
