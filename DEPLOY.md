@@ -120,6 +120,32 @@ Cada repo tiene `.github/workflows/ci.yml`, que corre en cada push o pull reques
 
 El resultado aparece como ✓ o ✗ junto a cada commit en GitHub.
 
+### Respaldos de la base
+
+`deploy/backup-db.sh` hace un respaldo completo de `LavaRapido`, lo verifica y lo deja comprimido
+en `~/lavarapido/backups/` (se guardan los últimos 14). Corre solo en tres momentos:
+
+- antes de cada `update-server.sh` (si falla, no se actualiza);
+- 5 minutos después de encender la VM;
+- todos los días a las 23:00 UTC (6 p. m. en Colombia), si la VM está encendida.
+
+`setup-server.sh` programa los dos últimos en el `crontab` de `azureuser`; el historial queda en
+`~/lavarapido/backups/backup.log`. La base usa el modelo de recuperación `SIMPLE` (lo pone
+`db-init`): con respaldos completos no hacen falta respaldos del registro de transacciones.
+
+```bash
+bash ~/lavarapido/lavarapido-infra/deploy/backup-db.sh                       # respaldar ya
+bash ~/lavarapido/lavarapido-infra/deploy/restore-db.sh <archivo.bak.gz> --as LavaRapido_prueba   # revisar un respaldo sin tocar la base
+bash ~/lavarapido/lavarapido-infra/deploy/restore-db.sh <archivo.bak.gz>     # volver la base a ese respaldo (pide escribir RESTAURAR)
+```
+
+Los respaldos viven en el mismo disco de la VM: sirven ante un error o una migración mala, no si
+se pierde la VM. Para guardar una copia afuera, desde el PC:
+
+```bash
+scp -i ~/.ssh/lavarapido_azure "azureuser@IP-DEL-VPS:~/lavarapido/backups/*.bak.gz" .
+```
+
 ## 7. Publicar una versión nueva de la app
 
 Desde la carpeta de la app móvil, después de `eas build -p android --profile preview`:
@@ -143,7 +169,7 @@ tienen la app instalada. Para cambios solo de pantallas o lógica no hace falta 
 | `INTERNAL_API_KEY`, usuario de RabbitMQ opcionales | Obligatorios (no arranca sin ellos) |
 | Sin límite de memoria | 512 MB por servicio Java, reinicio automático |
 | Logs sin tope | Hasta 3 archivos de 10 MB por contenedor |
-| Sin chequeo de salud en los servicios | Cada servicio y la web con *healthcheck* (`docker compose ps` muestra `healthy` o `unhealthy`; Docker no reinicia solo un `unhealthy`) |
+| Sin chequeo de salud en los servicios | Cada servicio, la web y Caddy con *healthcheck* (`docker compose ps` muestra `healthy` o `unhealthy`; Docker no reinicia solo un `unhealthy`) |
 | Sin encabezados de seguridad | Caddy agrega HSTS, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` y un CSP para la web |
 
 **Si la web cambia lo que carga de afuera** (otra fuente, un CDN, un script), hay que agregar ese
