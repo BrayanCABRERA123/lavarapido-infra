@@ -183,6 +183,11 @@ services:
     mem_limit: 64m
     restart: unless-stopped
     logging: *logging
+    # el panel interno de Caddy (solo dentro del contenedor) responde mientras el proceso funciona
+    healthcheck:
+      <<: *health-timing
+      start_period: 20s
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
 
 volumes:
   caddy-data:
