@@ -72,6 +72,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_FIRST_NAME: ${ADMIN_FIRST_NAME:-}
       ADMIN_LAST_NAME: ${ADMIN_LAST_NAME:-}
+      ADMIN_DOCUMENT: ${ADMIN_DOCUMENT:-}
+      ADMIN_PHONE: ${ADMIN_PHONE:-}
 
   customer-service:
     <<: *java-limits
