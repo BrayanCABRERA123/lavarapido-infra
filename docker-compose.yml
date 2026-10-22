@@ -186,6 +186,10 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       # zona horaria del lavadero para el horario y las fechas
       BOOKING_ZONE: ${BOOKING_ZONE:-America/Bogota}
+      # cancela las reservas programadas que pasaron su hora de fin + el margen sin confirmarse
+      BOOKING_EXPIRY_CHECK_ENABLED: ${BOOKING_EXPIRY_CHECK_ENABLED:-true}
+      BOOKING_EXPIRY_CHECK_INTERVAL: ${BOOKING_EXPIRY_CHECK_INTERVAL:-PT5M}
+      BOOKING_EXPIRY_GRACE_MINUTES: ${BOOKING_EXPIRY_GRACE_MINUTES:-60}
       # publica BookingConfirmed / BookingCancelled a notification-service
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
@@ -223,6 +227,12 @@ services:
       # false: el administrador asigna a mano (sin asignación automática)
       AUTO_ASSIGN_ENABLED: ${AUTO_ASSIGN_ENABLED:-true}
       BOOKING_ZONE: ${BOOKING_ZONE:-America/Bogota}
+      # reservas que terminaron y nadie cerró: sin operario quedan "no asistió", con operario "Por cerrar"
+      FOLLOW_UP_ENABLED: ${FOLLOW_UP_ENABLED:-true}
+      FOLLOW_UP_INTERVAL: ${FOLLOW_UP_INTERVAL:-PT5M}
+      FOLLOW_UP_LOOK_BACK_DAYS: ${FOLLOW_UP_LOOK_BACK_DAYS:-28}
+      # el mismo margen que booking-service
+      BOOKING_EXPIRY_GRACE_MINUTES: ${BOOKING_EXPIRY_GRACE_MINUTES:-60}
       # publica OperatorAssigned / ServiceStarted / ServiceCompleted a notification-service
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
@@ -319,6 +329,10 @@ services:
       ROUTE_BOOKING_URL: http://booking-service:3003
       ROUTE_PAYMENT_URL: http://payment-service:3005
       ROUTE_NOTIFICATION_URL: http://notification-service:3006
+      # corta los tokens de sesiones cerradas preguntando a security-service (respuesta guardada por token)
+      SESSION_CHECK_ENABLED: ${SESSION_CHECK_ENABLED:-true}
+      SESSION_CHECK_CACHE_TTL: ${SESSION_CHECK_CACHE_TTL:-30s}
+      SESSION_CHECK_TIMEOUT: ${SESSION_CHECK_TIMEOUT:-3s}
     ports:
       - "8080:8080"
 
