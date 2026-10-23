@@ -34,6 +34,35 @@ fi
 echo "== Construyendo y levantando: ${*:-todos los servicios}"
 "${COMPOSE[@]}" up -d --build "$@"
 
+# up -d no espera a que los servicios arranquen: si alguno no queda sano (p. ej. una migración que
+# falla y lo deja reiniciándose), la actualización termina con error en vez de darse por buena.
+# Los Java tardan 1-2 minutos (start_period 150 s y chequeo cada 30 s), así que se espera hasta 8.
+CONTAINERS=(sqlserver rabbitmq security-service customer-service booking-service operations-service
+  notification-service payment-service api-gateway web caddy)
+not_healthy() {
+  local name status health
+  for name in "${CONTAINERS[@]}"; do
+    read -r status health < <(sudo docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' \
+      "lavarapido-$name" 2>/dev/null || echo "no-existe")
+    if [ "$status" != running ] || { [ -n "$health" ] && [ "$health" != healthy ]; }; then
+      echo "$name (${health:-$status})"
+    fi
+  done
+}
+echo "== Esperando a que los servicios queden sanos"
+pending=""
+for _ in $(seq 1 48); do
+  pending="$(not_healthy)"
+  [ -z "$pending" ] && break
+  sleep 10
+done
+
 echo "== Estado"
 "${COMPOSE[@]}" ps --format "table {{.Name}}\t{{.Status}}"
-echo "Listo. Los servicios Java tardan 1-2 minutos en responder después de reiniciar."
+if [ -n "$pending" ]; then
+  echo "Error: estos servicios no quedaron sanos en 8 minutos:"
+  echo "$pending" | sed 's/^/  /'
+  echo "Revisa su log con: sudo docker logs --tail 100 lavarapido-<servicio>"
+  exit 1
+fi
+echo "Listo: todos los servicios están sanos."
