@@ -59,11 +59,16 @@ fi
 # inesperados (stderr) también van ahí.
 mkdir -p "$ROOT/backups" && chmod 700 "$ROOT/backups"
 job="bash $ROOT/lavarapido-infra/deploy/backup-db.sh > /dev/null 2>> $ROOT/backups/backup.log && bash $ROOT/lavarapido-infra/deploy/verify-backup.sh > /dev/null 2>> $ROOT/backups/backup.log"
+# al arrancar, la VM también se pone al día con lo que entró a main mientras estaba apagada
+# (deploy/boot-update.sh); deja el resultado en backups/deploy.log
+boot="bash $ROOT/lavarapido-infra/deploy/boot-update.sh >> $ROOT/backups/deploy.log 2>&1"
 # crontab -l falla si todavía no hay ninguna tarea: no es un error
-{ crontab -l 2>/dev/null | grep -vE 'lavarapido-backup|deploy/backup-db\.sh' || true
+{ crontab -l 2>/dev/null | grep -vE 'lavarapido-backup|lavarapido-boot-update|deploy/backup-db\.sh' || true
   echo "# lavarapido-backup: respaldo y verificación de la base al arrancar la VM y cada día"
   echo "@reboot sleep 300 && $job # lavarapido-backup"
   echo "0 23 * * * $job # lavarapido-backup"
+  echo "# lavarapido-boot-update: al arrancar, actualizar si hay versiones nuevas en main"
+  echo "@reboot sleep 120 && $boot # lavarapido-boot-update"
 } | crontab -
 
 sync_repo() {
