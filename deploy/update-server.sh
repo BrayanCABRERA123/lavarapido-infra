@@ -8,12 +8,13 @@
 # Los datos (base de datos, RabbitMQ, certificados) se conservan.
 set -euo pipefail
 
-BRANCH="${BRANCH:-develop}"
 INFRA="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "== Bajando los repos ($BRANCH)"
+# la rama de cada repo la decide setup-server.sh (main, salvo los que aún no tienen versión);
+# BRANCH=develop bash update-server.sh la cambia para todos
+echo "== Bajando los repos"
 # si algún repo no se pudo bajar no se construye nada: sería desplegar una mezcla de versiones
-if ! BRANCH="$BRANCH" bash "$INFRA/deploy/setup-server.sh" | grep -E "Actualizando|Clonando|fatal|error"; then
+if ! bash "$INFRA/deploy/setup-server.sh" | grep -E "Actualizando|Clonando|fatal|error"; then
   echo "No se actualizó el servidor: revisa el error de arriba y vuelve a correr este script."
   exit 1
 fi
