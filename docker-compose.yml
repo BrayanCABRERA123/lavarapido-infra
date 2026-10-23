@@ -118,6 +118,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
+      # cuentas demo del perfil dev (E-05): vacía = esa cuenta no se crea
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-}
+      DEMO_OPERATOR_PASSWORD: ${DEMO_OPERATOR_PASSWORD:-}
+      DEMO_CLIENT_PASSWORD: ${DEMO_CLIENT_PASSWORD:-}
       # Correo: dentro de Docker, Mailpit se llama "mailpit" (no "localhost").
       # Con Gmail/Brevo se usan tal cual los valores del .env.
       MAIL_ENABLED: ${MAIL_ENABLED:-false}
