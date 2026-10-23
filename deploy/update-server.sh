@@ -9,6 +9,7 @@
 set -euo pipefail
 
 INFRA="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(dirname "$INFRA")"
 
 # la rama de cada repo la decide setup-server.sh (main, salvo los que aún no tienen versión);
 # BRANCH=develop bash update-server.sh la cambia para todos
@@ -71,5 +72,12 @@ if [ -n "$pending" ]; then
   echo "$pending" | sed 's/^/  /'
   echo "Revisa su log con: sudo docker logs --tail 100 lavarapido-<servicio>"
   exit 1
+fi
+
+# se anota qué quedó desplegado, solo si se actualizó todo: boot-update.sh compara contra esto,
+# así una actualización que falló a mitad (o una parcial) se completa al encender la VM
+if [ "$#" -eq 0 ]; then
+  mkdir -p "$ROOT/backups"
+  bash "$INFRA/deploy/repo-heads.sh" "$ROOT" > "$ROOT/backups/deployed-heads"
 fi
 echo "Listo: todos los servicios están sanos."
