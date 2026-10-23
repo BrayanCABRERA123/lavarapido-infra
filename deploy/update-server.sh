@@ -34,6 +34,13 @@ fi
 echo "== Construyendo y levantando: ${*:-todos los servicios}"
 "${COMPOSE[@]}" up -d --build "$@"
 
+# el Caddyfile se monta como archivo suelto: cuando git lo reemplaza, el contenedor sigue viendo el
+# viejo y "up" no lo recrea. Si lo que ve Caddy no es lo del repo, se reinicia para que lo lea.
+if ! sudo docker exec lavarapido-caddy cat /etc/caddy/Caddyfile 2>/dev/null | cmp -s - "$INFRA/deploy/Caddyfile"; then
+  echo "== El Caddyfile cambió: reiniciando Caddy"
+  "${COMPOSE[@]}" restart caddy
+fi
+
 # up -d no espera a que los servicios arranquen: si alguno no queda sano (p. ej. una migración que
 # falla y lo deja reiniciándose), la actualización termina con error en vez de darse por buena.
 # Los Java tardan 1-2 minutos (start_period 150 s y chequeo cada 30 s), así que se espera hasta 8.
