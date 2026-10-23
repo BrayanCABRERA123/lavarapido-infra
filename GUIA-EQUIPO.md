@@ -110,7 +110,7 @@ api-gateway (8080); el gateway reparte cada petición al servicio que le toca (A
 |---|---|---|---|
 | 1 | — | Abrir **Docker Desktop** | Dice *Engine running* |
 | 2 | `lavarapido-infra` | `docker compose up -d` | `docker compose ps` muestra `lavarapido-sqlserver` **healthy** y `lavarapido-mailpit` arriba |
-| 3 | `lavarapido-security-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started SecurityServiceApplication` |
+| 3 | `lavarapido-security-service` | `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"` (no hay perfil por defecto, E-05) | Sale `Started SecurityServiceApplication` |
 | 4 | `lavarapido-customer-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started CustomerServiceApplication` |
 | 5 | `lavarapido-booking-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started BookingServiceApplication` |
 | 6 | `lavarapido-operation-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started OperationServiceApplication` |
@@ -141,13 +141,18 @@ Deben pasar todas (`BUILD SUCCESS`). No necesitan la base de datos.
 
 ## 5. Usuarios de prueba para entrar a cada pantalla
 
-Se crean solos la primera vez que arranca `lavarapido-security-service` (perfil `dev`).
+Se crean solos la primera vez que arranca `lavarapido-security-service` con el perfil `dev`, **solo si**
+definiste sus contraseñas en tu `lavarapido-infra/.env` (las contraseñas ya no están en el código ni en
+este documento, E-05). La cuenta cuya variable quede vacía no se crea.
 
-| Rol | Correo | Contraseña | Entra a |
+| Rol | Correo | Variable con la contraseña | Entra a |
 |---|---|---|---|
-| Administrador | `admin@gmail.com` | `Admin123!` | `/admin` |
-| Operario | `operador@gmail.com` | `Operador123!` | `/operator` |
-| Cliente | `cliente@gmail.com` | `Cliente123!` | `/client` |
+| Administrador | `admin@gmail.com` | `DEMO_ADMIN_PASSWORD` | `/admin` |
+| Operario | `operador@gmail.com` | `DEMO_OPERATOR_PASSWORD` | `/operator` |
+| Cliente | `cliente@gmail.com` | `DEMO_CLIENT_PASSWORD` | `/client` |
+
+Las contraseñas deben cumplir la política (8+ caracteres con mayúscula, número y símbolo). Si ya tenías
+estas cuentas creadas con las contraseñas antiguas, siguen funcionando hasta que las cambies.
 
 - Cada rol **solo** puede entrar a su área; si intentas otra, te devuelve a la tuya.
 - Sin iniciar sesión no se puede entrar a `/admin`, `/operator` ni `/client`.
