@@ -78,20 +78,35 @@ Lo normal es no hacer nada a mano: cuando un PR aprobado entra a `main`, se desp
 1. En el repo que cambió, `ci.yml` corre el CI; si pasa y el push fue a `main`, su job **Pedir
    despliegue** lanza el workflow **Desplegar en Azure** de este repo (con `automatic=true`).
 2. Ese workflow entra por SSH, hace respaldo, baja `main` de todos los repos y reconstruye solo lo
-   que cambió; al final comprueba que la web y la API respondan 200.
+   que cambió. Si ya hay otra actualización corriendo (p. ej. la del arranque de la VM), espera a
+   que termine (hasta 20 min) y después actualiza igual. Luego espera a que **todos** los
+   contenedores queden sanos (hasta 8 min): si alguno no arranca, el workflow sale en rojo y dice
+   cuál. Al final comprueba que la web y la API respondan 200.
 3. Si la VM está **apagada**, el workflow deja un aviso y **no falla**. Al encender la VM,
    `deploy/boot-update.sh` (tarea `@reboot` que instala `setup-server.sh`) baja lo nuevo de `main` y
-   actualiza; si no hay nada nuevo, no reconstruye. El resultado queda en `~/lavarapido/backups/deploy.log`.
-4. Un cambio en `main` de este repo (compose o `deploy/`) también despliega solo.
+   actualiza si hay algo sin desplegar: lo que entró mientras estaba apagada, o lo que quedó a medias
+   porque la última actualización falló (compara contra `~/lavarapido/backups/deployed-heads`, que se
+   escribe solo cuando una actualización completa termina bien). Si todo está desplegado, no
+   reconstruye. El resultado queda en `~/lavarapido/backups/deploy.log`.
+4. Un cambio en `main` de este repo (compose o `deploy/`) también despliega solo. Si cambia el
+   `Caddyfile`, Caddy se reinicia para leerlo.
 
 Secretos que hacen falta (una vez):
 
 | Repo | Secreto | Qué es |
 |---|---|---|
 | lavarapido-infra | `AZURE_SSH_KEY` | La llave de GitHub para entrar al servidor (ver "Desde GitHub" abajo) |
-| Cada repo que se despliega (web, gateway, security, customer, booking, operations, notification, payment) | `DEPLOY_DISPATCH_TOKEN` | Token *fine-grained* de GitHub con acceso **solo** a `lavarapido-infra` y permiso **Actions: Read and write** (sirve solo para lanzar el despliegue) |
+| Cada repo que tiene el job **Pedir despliegue** (hoy: web, gateway, security, operations, notification) | `DEPLOY_DISPATCH_TOKEN` | Token *fine-grained* de GitHub con acceso **solo** a `lavarapido-infra` y permiso **Actions: Read and write** (sirve solo para lanzar el despliegue) |
 
 Si falta `DEPLOY_DISPATCH_TOKEN`, el job **Pedir despliegue** de ese repo sale en rojo y no se despliega.
+customer, booking y payment todavía no tienen ese job: sus cambios llegan a producción con el
+siguiente despliegue de cualquier repo (siempre se baja lo último de todos) o a mano. Para
+agregarlo, su dueño copia el job `deploy` del `ci.yml` de la web y crea el secreto en su repo.
+
+**La primera vez** después de fusionar este cambio a `main`, correr el workflow a mano **dos veces**
+con la VM encendida: la primera corre los scripts viejos que tiene el servidor (bajan `develop`); la
+segunda ya usa los nuevos, pasa el servidor a `main` e instala la tarea de arranque. Para revisarlo:
+`crontab -l | grep boot-update` y `git -C ~/lavarapido/Front-end-proyecto-web branch --show-current` → `main`.
 
 ### A mano
 
