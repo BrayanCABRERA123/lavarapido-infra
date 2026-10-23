@@ -12,13 +12,14 @@ Cada pieza vive en **su propio repositorio**:
 | Repositorio | Qué tiene | Estado |
 |---|---|---|
 | `Front-end-proyecto-web` | App Angular (cliente, operario, admin) | Activo |
-| `lavarapido-infra` | SQL Server en Docker, `docker-compose.yml`, plantilla `.env`, esta guía | Activo |
+| `lavarapido-infra` | SQL Server, RabbitMQ y Mailpit en Docker, `docker-compose.yml`, plantilla `.env`, esta guía | Activo |
 | `lavarapido-security-service` | Cuentas, login con JWT, recuperación de contraseña, perfil, usuarios | Activo |
-| `lavarapido-customer-service` | Clientes, vehículos, puntos (copia) | Por hacer |
-| `lavarapido-booking-service` | Catálogo, precios, horarios, bahías, reservas | Por hacer |
-| `lavarapido-operations-service` | Operarios, disponibilidad, ejecución, calificaciones | Por hacer |
-| `lavarapido-payment-service` | Promociones, pagos, comprobantes, puntos (libro contable) | Por hacer |
-| `lavarapido-notification-service` | Notificaciones dentro de la app | Por hacer |
+| `lavarapido-customer-service` | Clientes, vehículos, puntos (copia) | Activo |
+| `lavarapido-booking-service` | Catálogo, precios, horarios, bahías, reservas | Activo |
+| `lavarapido-operation-service` | Operarios, disponibilidad, asignación, ejecución, calificaciones | Activo |
+| `lavarapido-payment-service` | Cuentas de pago con QR, pagos con comprobante, revisión del admin, promociones y puntos (.NET) | Activo |
+| `lavarapido-notification-service` | Notificaciones: bandeja, push al celular, mensajes del admin; escucha eventos de RabbitMQ | Activo |
+| `lavarapido-api-gateway` | Spring Cloud Gateway: punto de entrada único en el 8080, enruta a cada servicio (ADR-005) | Activo |
 
 Todos los servicios usan **la misma base de datos** (`LavaRapido` en SQL Server), pero cada uno
 es dueño de **sus propios esquemas** y nadie toca las tablas de otro (ADR-003, ADR-009). Por eso
@@ -102,23 +103,30 @@ npm install
 
 ## 4. Día a día: qué ejecutar en cada repo
 
-Abre **una terminal por cada cosa** y déjalas abiertas.
+Abre **una terminal por cada cosa** y déjalas abiertas. La web y el móvil **solo** hablan con el
+api-gateway (8080); el gateway reparte cada petición al servicio que le toca (ADR-005).
 
 | # | Dónde | Comando | Cuándo está listo |
 |---|---|---|---|
 | 1 | — | Abrir **Docker Desktop** | Dice *Engine running* |
-| 2 | `lavarapido-infra` | `docker compose up -d` | `docker compose ps` muestra `lavarapido-sqlserver` **healthy** |
+| 2 | `lavarapido-infra` | `docker compose up -d` | `docker compose ps` muestra `lavarapido-sqlserver` **healthy** y `lavarapido-mailpit` arriba |
 | 3 | `lavarapido-security-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started SecurityServiceApplication` |
-| 4 | `Front-end-proyecto-web` | `npx ng serve` | Abre http://localhost:4200 |
+| 4 | `lavarapido-customer-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started CustomerServiceApplication` |
+| 5 | `lavarapido-booking-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started BookingServiceApplication` |
+| 6 | `lavarapido-operation-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started OperationServiceApplication` |
+| 7 | `lavarapido-notification-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started NotificationServiceApplication` |
+| 8 | `lavarapido-payment-service` | `dotnet run --project src/PaymentService.Api` | Responde `http://localhost:5080/health` (o el `PAYMENT_PORT` que tengas) |
+| 9 | `lavarapido-api-gateway` | `.\mvnw.cmd spring-boot:run` | Sale `Started ApiGatewayApplication`, responde `http://localhost:8080` |
+| 10 | `Front-end-proyecto-web` | `npx ng serve` | Abre http://localhost:4200 |
 
-La primera vez el paso 3 tarda unos minutos porque descarga dependencias y crea las tablas.
+La primera vez cada servicio Java tarda unos minutos porque descarga dependencias y crea sus tablas.
 
-**Para apagar:** `Ctrl + C` en las terminales 3 y 4, y en `lavarapido-infra`:
+**Para apagar:** `Ctrl + C` en todas las terminales de servicios y del front, y en `lavarapido-infra`:
 `docker compose down` (los datos se conservan). Para **borrar** la base y empezar de cero:
 `docker compose down -v`.
 
-**Alternativa (todo en Docker, sin Java instalado):** en `lavarapido-infra`:
-`docker compose --profile app up -d --build`.
+**Alternativa (todo en Docker, sin Java ni .NET instalados):** en `lavarapido-infra`:
+`docker compose --profile app up -d --build` levanta los seis servicios y el gateway en contenedores.
 
 ### Pruebas automáticas de un servicio
 
@@ -145,14 +153,28 @@ Se crean solos la primera vez que arranca `lavarapido-security-service` (perfil 
 - Sin iniciar sesión no se puede entrar a `/admin`, `/operator` ni `/client`.
 - También puedes **registrarte** como cliente nuevo desde la pantalla de registro.
 
-### Recuperar contraseña (en desarrollo)
+### Recuperar contraseña: ¿dónde llega el código?
 
-Todavía no se envían correos. El código de 6 dígitos **sale en la terminal del
-security-service**, en una línea así:
+Depende de lo que tengas en tu `lavarapido-infra/.env`:
 
-```
-[DEV] Password recovery code for tu@gmail.com (Nombre Apellido): 123456 (expires ...)
-```
+| Configuración | Dónde ves el código |
+|---|---|
+| `MAIL_ENABLED=true` + Mailpit (**la que trae `.env.example`**) | En la bandeja de prueba **http://localhost:8025**. No le llega a nadie de verdad |
+| `MAIL_ENABLED=true` + Gmail | En el **correo real** del usuario (revisa también spam) |
+| `MAIL_ENABLED=false` | En la terminal del security-service: `[DEV] Password recovery code for ...: 123456` |
+
+Mailpit se levanta solo con `docker compose up -d`. El correo trae el nombre del usuario, el
+código de 6 dígitos y la hora en que vence.
+
+**Para que llegue a Gmail de verdad** (solo quien tenga la cuenta del proyecto):
+1. La cuenta necesita **verificación en dos pasos** activa.
+2. Crear una **contraseña de aplicación** en https://myaccount.google.com/apppasswords
+   (16 letras; se pega **sin espacios**).
+3. En `.env`, comentar el bloque de Mailpit y llenar el de Gmail (`MAIL_HOST=smtp.gmail.com`,
+   `MAIL_PORT=587`, usuario, contraseña de aplicación y `MAIL_FROM`).
+4. Reiniciar el security-service.
+
+> ⚠️ La contraseña de aplicación es secreta: solo va en tu `.env`, nunca en GitHub ni en el chat.
 
 El código dura 15 minutos, sirve una sola vez y se bloquea después de 5 intentos fallidos.
 
@@ -166,12 +188,22 @@ Mínimo 8 caracteres, una mayúscula, un número y un carácter especial (ej. `L
 
 | Conectado (datos reales) | Todavía con datos de prueba |
 |---|---|
-| Login, registro, recuperar contraseña | Reservas, vehículos, historial, pagos, notificaciones |
-| Cambiar contraseña (modal del perfil) | Todo lo del operario |
-| Cerrar sesión | Todo lo del admin (reservas, operarios, pagos, horarios, catálogo, promociones, reportes, usuarios) |
-| Protección de rutas por rol | Editar perfil y preferencias (el backend ya tiene los endpoints) |
+| Login, registro, recuperar contraseña | Reportes: se calculan en el navegador con las reservas y los pagos reales |
+| Cambiar contraseña, editar perfil y preferencias | Matriz de permisos por rol: se guarda, pero todavía no cambia lo que hace cada rol (ADR-015) |
+| Cerrar sesión, protección de rutas por rol | |
+| Vehículos (customer-service) | |
+| Reservas, catálogo, horarios, bahías (booking-service) | |
+| Operarios, asignación, ejecución, calificaciones (operation-service) | |
+| Pagos: cuentas con QR, reporte de comprobante, revisión del admin, reembolsos (payment-service) | |
+| Promociones, cupones y puntos de fidelidad (payment-service) | |
+| Datos del negocio y contactos del "Centro de ayuda" (booking-service) | |
+| Informes de inspección con fotos y enlace público (operation-service) | |
+| Notificaciones e historial del cliente | |
+| Todo el admin (reservas, operarios, pagos, horarios, catálogo, promociones, reportes, usuarios) | |
+| Todo el operario | |
 
-Las pantallas pendientes se conectan a medida que existan sus microservicios (tabla de la sección 1).
+Todas las pantallas leen y guardan en el backend; lo de la columna derecha son los dos casos que todavía
+se resuelven en el navegador.
 
 ---
 
@@ -182,6 +214,14 @@ Cada servicio tiene su documentación interactiva **solo en desarrollo**:
 | Servicio | Swagger |
 |---|---|
 | security-service | http://localhost:3001/swagger-ui.html |
+| customer-service | http://localhost:3002/swagger-ui.html |
+| booking-service | http://localhost:3003/swagger-ui.html |
+| operation-service | http://localhost:3004/swagger-ui.html |
+| payment-service | http://localhost:3005/swagger (Swashbuckle, solo en Development) |
+| notification-service | http://localhost:3006/swagger-ui.html |
+
+El api-gateway (8080) no trae Swagger propio: es solo el enrutador, prueba cada endpoint contra
+el puerto del servicio como en la tabla de arriba, o a través del 8080 con la misma ruta `/api/v1/...`.
 
 **Cómo probar un endpoint protegido:**
 
@@ -198,6 +238,41 @@ Cada servicio tiene su documentación interactiva **solo en desarrollo**:
 
 ---
 
+## 7.1 RabbitMQ: eventos entre servicios (ADR-004)
+
+Los servicios se hablan de dos formas: **REST** cuando necesitan validar algo en el momento, y
+**eventos por RabbitMQ** para avisar "pasó X" sin frenar al usuario (ej. notificaciones).
+
+- `docker compose up -d` ya levanta RabbitMQ. Panel: http://localhost:15672 (`guest` / `guest`).
+- En el `.env`: `MESSAGING_ENABLED=true` para que los servicios publiquen y escuchen. Con `false`
+  todo funciona igual, pero los eventos solo quedan en el log.
+- Exchange único: `carwash.events` (topic). Routing key: `<esquema>.<evento_en_snake_case>`,
+  ej. `booking.confirmed` (tabla completa en `05-architecture/cross-cutting.md` §7).
+- Todo mensaje lleva el mismo sobre (JSON):
+
+```json
+{ "eventId": "uuid", "eventType": "BookingConfirmed", "aggregateId": "145",
+  "occurredAt": "2026-10-01T15:00:00Z", "version": 1, "payload": { } }
+```
+
+**Si tu servicio publica un evento que genera notificación** (booking, operations, payment), en el
+`payload` va el `user_id` de quien la recibe: `customerUserId`, `operatorUserId`. La tabla de
+campos por evento está en **ADR-011**. Publica **después** del commit de la base
+(`TransactionSynchronization.afterCommit`), como hace `RabbitDomainEventPublisher` en el
+security-service.
+
+**Si tu servicio escucha eventos:** declara tu propia cola (`<tu-servicio>.events`) enlazada solo
+a las routing keys que necesitas, y guarda el `eventId` procesado para ignorar repetidos (RabbitMQ
+entrega "al menos una vez"). Ejemplo completo: `lavarapido-notification-service`.
+
+Hoy publica: **security** (`security.user_registered`), **booking** (`booking.confirmed` /
+`booking.cancelled`), **operations** (`execution.operator_assigned` / `execution.service_started` /
+`execution.service_completed`). Hoy escucha: **customer** (`security.user_registered`, crea el
+perfil con `UserRegisteredListener`) y **notification**, que además de esas se suscribió de una vez
+a `booking.created` y a `payment.confirmed` / `payment.rejected` (cross-cutting.md §7); nadie las
+publica todavía porque booking solo emite confirmed/cancelled y payment no usa RabbitMQ, así que
+por ahora esos tres bindings no reciben nada.
+
 ## 8. Crear un microservicio nuevo (reglas para todos)
 
 ### 8.1 Nombres y puertos
@@ -207,8 +282,8 @@ Cada servicio tiene su documentación interactiva **solo en desarrollo**:
 | security | `lavarapido-security-service` | `com.lavarapido.security` | 3001 | `security`, `audit` |
 | customer | `lavarapido-customer-service` | `com.lavarapido.customer` | 3002 | `customer` |
 | booking | `lavarapido-booking-service` | `com.lavarapido.booking` | 3003 | `catalog`, `booking` |
-| operations | `lavarapido-operations-service` | `com.lavarapido.operations` | 3004 | `execution` |
-| payment | `lavarapido-payment-service` | `com.lavarapido.payment` | 3005 | `promotion`, `payment` |
+| operations | `lavarapido-operation-service` | `com.lavarapido.operations` | 3004 | `execution` |
+| payment | `lavarapido-payment-service` | — (.NET 8, no Java) | 3005 | `promotion`, `payment` |
 | notification | `lavarapido-notification-service` | `com.lavarapido.notification` | 3006 | `notification` |
 
 - Nombre del repo: siempre `lavarapido-<nombre>-service`, en minúsculas.
@@ -329,6 +404,8 @@ En `lavarapido-infra/docker-compose.yml` copien el bloque `security-service` y c
 | El login dice "No hay conexión con el servidor" | El servicio no está corriendo, o `ng serve` se abrió antes de tener el proxy | Levantar el servicio y reiniciar `ng serve` |
 | SQL Server no arranca en Docker | `DB_PASSWORD` muy débil | Poner una más fuerte en `.env` y `docker compose down -v` + `up -d` |
 | `mvnw` no se reconoce | Estás en PowerShell | Usar `.\mvnw.cmd` |
+| No llega el correo de recuperación | `MAIL_ENABLED=false`, Mailpit apagado, o la contraseña de aplicación de Gmail está mal | Revisar el `.env`; en la terminal del servicio buscar `Could not send the password recovery email` |
+| Gmail responde `535 Username and Password not accepted` | Se usó la contraseña normal o se pegó con espacios | Usar la contraseña de aplicación de 16 letras, sin espacios |
 
 ---
 

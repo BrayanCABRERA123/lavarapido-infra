@@ -1,0 +1,55 @@
+# Entrada pública de LavaRápido en producción (docker-compose.prod.yml).
+# SITE_ADDRESS: el dominio (ej. vehiclecarwash.com) para HTTPS automático, o :80 sin dominio.
+{$SITE_ADDRESS}
+
+encode gzip
+
+# encabezados de seguridad para todas las respuestas. defer: se aplican al final y reemplazan
+# los que manda el nginx de la web (nginx-security-headers.conf), así no salen repetidos ni
+# contradictorios; los valores coinciden con los suyos
+header {
+	defer
+	# solo HTTPS durante un año (el navegador lo ignora si la respuesta llega por http)
+	Strict-Transport-Security "max-age=31536000"
+	# el navegador no adivina el tipo de archivo (evita ejecutar un archivo como script)
+	X-Content-Type-Options "nosniff"
+	# solo la propia web puede mostrarse dentro de un marco (clickjacking)
+	X-Frame-Options "SAMEORIGIN"
+	Referrer-Policy "strict-origin-when-cross-origin"
+	# sin cámara, micrófono ni ubicación desde el navegador (la web no los usa)
+	Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+	# no anunciar qué servidor ni qué versión se usa
+	-Server
+}
+
+# la app móvil y la web llaman /api/v1/...: van directo al API Gateway
+handle /api/* {
+	reverse_proxy api-gateway:8080
+}
+
+# descargas públicas: el APK de la app Android y su version.json (deploy/downloads, ver README).
+# Dirección fija: /app/LavaRapidoVehicular.apk
+handle_path /app/* {
+	root * /srv/downloads
+	# el celular lo reconoce como app instalable (Go no conoce la extensión .apk)
+	@apk path *.apk
+	header @apk Content-Type application/vnd.android.package-archive
+	header @apk Content-Disposition "attachment; filename=\"LavaRapidoVehicular.apk\""
+	# la versión publicada siempre se lee fresca (la app y la web la consultan para avisar)
+	@version path /version.json
+	header @version Cache-Control "no-cache"
+	file_server
+}
+
+# todo lo demás es la web (nginx con el build de Angular). El actuator del gateway queda
+# fuera: /actuator no empieza por /api, así que nunca llega al gateway
+handle {
+	# qué puede cargar la web. Externos: Google Fonts y las banderas de jsDelivr. El hash
+	# autoriza solo el onload="this.media='all'" que Angular pone al compilar para cargar los
+	# estilos; sin él la página quedaría sin estilos. Imágenes data: = QR y comprobantes.
+	header {
+		defer
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-hashes' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://cdn.jsdelivr.net; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+	}
+	reverse_proxy web:80
+}

@@ -1,6 +1,6 @@
 # Backend de LavaRapido — entorno local.
 #
-#   docker compose up -d                          -> solo SQL Server (los servicios se corren desde el IDE)
+#   docker compose up -d                          -> SQL Server, Mailpit y RabbitMQ (los servicios se corren desde el IDE)
 #   docker compose --profile app up -d --build    -> SQL Server + todos los servicios del backend en contenedores
 #
 # Los secretos salen de ./.env (copiar .env.example). Nunca subir el .env.
@@ -15,6 +15,9 @@ services:
       MSSQL_PID: Developer
       MSSQL_SA_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Backend/.env (see .env.example)}
     ports:
+      # Si en el equipo hay un SQL Server nativo de Windows en el 1433, hay que detener
+      # el servicio MSSQLSERVER; si no, localhost:1433 responde la instancia nativa
+      # y los servicios fallan con "Login failed for user 'sa'".
       - "1433:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
@@ -39,8 +42,63 @@ services:
     entrypoint:
       - /bin/bash
       - -c
-      - /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -Q "IF DB_ID('$$DB_NAME') IS NULL CREATE DATABASE [$$DB_NAME]"
+      # SIMPLE: el registro de transacciones no crece sin fin; los respaldos son completos
+      # (deploy/backup-db.sh), así que no hacen falta respaldos del registro
+      - /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -Q "IF DB_ID('$$DB_NAME') IS NULL CREATE DATABASE [$$DB_NAME]; ALTER DATABASE [$$DB_NAME] SET RECOVERY SIMPLE"
     restart: "no"
+
+  # Tablas de payment-service (esquemas payment y promotion). El servicio es .NET y no aplica
+  # Liquibase al arrancar como los Java: este contenedor corre sus changelogs una vez y termina.
+  payment-migrate:
+    image: liquibase/liquibase:4.29
+    container_name: lavarapido-payment-migrate
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    volumes:
+      - ../lavarapido-payment-service/db:/liquibase/changelog/db:ro
+    command:
+      - --search-path=/liquibase/changelog
+      - --changelog-file=db/changelog/db.changelog-master.yaml
+      - --url=jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
+      - --username=sa
+      - --password=${DB_PASSWORD}
+      - --database-change-log-table-name=DATABASECHANGELOG_PAYMENT
+      - --database-change-log-lock-table-name=DATABASECHANGELOGLOCK_PAYMENT
+      - update
+    restart: "no"
+
+  # Servidor de correo SOLO para desarrollo: atrapa los correos que envían los servicios (no
+  # llegan a nadie) y los muestra en http://localhost:8025. Acepta cualquier usuario/clave.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: lavarapido-mailpit
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # bandeja web
+
+  # Mensajería entre servicios (ADR-004): eventos de dominio por el exchange carwash.events.
+  # Panel de administración en http://localhost:15672 (usuario y clave del .env).
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: lavarapido-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"     # AMQP (los servicios)
+      - "15672:15672"   # panel web
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   security-service:
     profiles: ["app"]
@@ -51,13 +109,30 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
       DB_USERNAME: ${DB_USERNAME:-sa}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
+      # Correo: dentro de Docker, Mailpit se llama "mailpit" (no "localhost").
+      # Con Gmail/Brevo se usan tal cual los valores del .env.
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_DOCKER_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-LavaRápido <no-reply@lavarapido.local>}
+      # llave para las rutas entre servicios /internal/** (ADR-011 sección 8)
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      # Eventos (ADR-004): dentro de Docker, RabbitMQ se llama "rabbitmq"
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
     ports:
       - "3001:3001"
 
@@ -69,15 +144,198 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
       DB_USERNAME: ${DB_USERNAME:-sa}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
+      # de aquí saca el person_id cuando el evento de registro no llegó (REST, ADR-004)
+      SECURITY_SERVICE_URL: http://security-service:3001/api/v1
+      # escucha security.user_registered para crear el perfil del cliente
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
     ports:
       - "3002:3002"
 
+  booking-service:
+    profiles: ["app"]
+    build: ../lavarapido-booking-service
+    image: lavarapido/booking-service:local
+    container_name: lavarapido-booking-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
+      # valida que el vehículo sea del cliente (REST, ADR-004)
+      CUSTOMER_SERVICE_URL: http://customer-service:3002/api/v1
+      # /internal/v1/bookings para operations-service sin usuario detrás (asignación automática RF-008)
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      # zona horaria del lavadero para el horario y las fechas
+      BOOKING_ZONE: ${BOOKING_ZONE:-America/Bogota}
+      # cancela las reservas programadas que pasaron su hora de fin + el margen sin confirmarse
+      BOOKING_EXPIRY_CHECK_ENABLED: ${BOOKING_EXPIRY_CHECK_ENABLED:-true}
+      BOOKING_EXPIRY_CHECK_INTERVAL: ${BOOKING_EXPIRY_CHECK_INTERVAL:-PT5M}
+      BOOKING_EXPIRY_GRACE_MINUTES: ${BOOKING_EXPIRY_GRACE_MINUTES:-60}
+      # publica BookingConfirmed / BookingCancelled a notification-service
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "3003:3003"
+
+  operations-service:
+    profiles: ["app"]
+    # ojo: el repo se llama lavarapido-operation-service (singular), no "operations"
+    build: ../lavarapido-operation-service
+    image: lavarapido/operations-service:local
+    container_name: lavarapido-operations-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
+      # reservas (leer, empezar, terminar) y nombres de los operarios (REST, ADR-004)
+      BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
+      SECURITY_SERVICE_URL: http://security-service:3001/api/v1
+      # primer nombre de clientes y operarios en las calificaciones (contacto interno, llave compartida)
+      SECURITY_INTERNAL_URL: http://security-service:3001
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      # rutas internas de booking (asignación automática RF-008 y operarios libres RF-010)
+      BOOKING_INTERNAL_URL: http://booking-service:3003
+      # false: el administrador asigna a mano (sin asignación automática)
+      AUTO_ASSIGN_ENABLED: ${AUTO_ASSIGN_ENABLED:-true}
+      BOOKING_ZONE: ${BOOKING_ZONE:-America/Bogota}
+      # reservas que terminaron y nadie cerró: sin operario quedan "no asistió", con operario "Por cerrar"
+      FOLLOW_UP_ENABLED: ${FOLLOW_UP_ENABLED:-true}
+      FOLLOW_UP_INTERVAL: ${FOLLOW_UP_INTERVAL:-PT5M}
+      FOLLOW_UP_LOOK_BACK_DAYS: ${FOLLOW_UP_LOOK_BACK_DAYS:-28}
+      # el mismo margen que booking-service
+      BOOKING_EXPIRY_GRACE_MINUTES: ${BOOKING_EXPIRY_GRACE_MINUTES:-60}
+      # publica OperatorAssigned / ServiceStarted / ServiceCompleted a notification-service
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "3004:3004"
+
+  notification-service:
+    profiles: ["app"]
+    build: ../lavarapido-notification-service
+    image: lavarapido/notification-service:local
+    container_name: lavarapido-notification-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_URL: jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
+      # dentro de Docker, RabbitMQ se llama "rabbitmq" (no "localhost")
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      # correo del cliente para avisos de reserva y recordatorios (ADR-011 sección 8)
+      SECURITY_SERVICE_URL: http://security-service:3001
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      REMINDER_LEADS: ${REMINDER_LEADS:-24h,1h}
+      # Correo de bienvenida: mismas variables que el security-service
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_DOCKER_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-LavaRápido <no-reply@lavarapido.local>}
+    ports:
+      - "3006:3006"
+
+  payment-service:
+    profiles: ["app"]
+    # .NET, no Java: no usa Liquibase al arrancar (eso lo hace payment-migrate una sola vez)
+    build: ../lavarapido-payment-service
+    image: lavarapido/payment-service:local
+    container_name: lavarapido-payment-service
+    depends_on:
+      payment-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_started
+    environment:
+      DB_HOST: sqlserver
+      DB_PORT: "1433"
+      DB_NAME: ${DB_NAME:-LavaRapido}
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
+      PAYMENT_PORT: "3005"
+      # cliente REST hacia booking-service (ADR-004): faltaba, lo necesita IBookingDirectory
+      BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
+      # carwash.events (fidelización/promociones: ADR-011, canje de cupones)
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "3005:3005"
+
+  api-gateway:
+    profiles: ["app"]
+    # punto de entrada único (ADR-005): la web y el móvil solo llaman al 8080
+    build: ../lavarapido-api-gateway
+    image: lavarapido/api-gateway:local
+    container_name: lavarapido-api-gateway
+    depends_on:
+      - security-service
+      - customer-service
+      - booking-service
+      - operations-service
+      - payment-service
+      - notification-service
+    environment:
+      ROUTE_SECURITY_URL: http://security-service:3001
+      ROUTE_CUSTOMER_URL: http://customer-service:3002
+      ROUTE_OPERATIONS_URL: http://operations-service:3004
+      ROUTE_BOOKING_URL: http://booking-service:3003
+      ROUTE_PAYMENT_URL: http://payment-service:3005
+      ROUTE_NOTIFICATION_URL: http://notification-service:3006
+      # corta los tokens de sesiones cerradas preguntando a security-service (respuesta guardada por token)
+      SESSION_CHECK_ENABLED: ${SESSION_CHECK_ENABLED:-true}
+      SESSION_CHECK_CACHE_TTL: ${SESSION_CHECK_CACHE_TTL:-30s}
+      SESSION_CHECK_TIMEOUT: ${SESSION_CHECK_TIMEOUT:-3s}
+    ports:
+      - "8080:8080"
+
 volumes:
   sqlserver-data:
+  rabbitmq-data:

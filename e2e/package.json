@@ -1,0 +1,13 @@
+{
+  "name": "lavarapido-e2e",
+  "private": true,
+  "description": "Pruebas entre servicios y mediciones de RNF del entorno local de LavaRápido",
+  "scripts": {
+    "flow": "node --test \"*.test.js\"",
+    "performance": "node performance.js",
+    "width": "node width-360.js"
+  },
+  "dependencies": {
+    "playwright-core": "1.64.0"
+  }
+}

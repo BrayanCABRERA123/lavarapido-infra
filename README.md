@@ -1,19 +1,22 @@
 # LavaRapido — Infrastructure
 
-Shared local infrastructure for the LavaRapido microservices: SQL Server today, and later RabbitMQ
-and the API Gateway. Every microservice lives in **its own repository**; this repository only
-holds what they share: the database container, the compose file and the secrets template.
+Shared local infrastructure for the LavaRapido microservices: SQL Server, RabbitMQ (domain events,
+ADR-004) and Mailpit, plus the compose profile that runs the API Gateway and every service in containers. Every
+microservice lives in **its own repository**; this repository only holds what they share: the database container, the
+compose file, the secrets template, the end-to-end tests (`e2e/`) and the production scripts (`deploy/`).
 
 | Service | Repository | Port | Schemas | Status |
 |---|---|---|---|---|
 | `security-service` | `lavarapido-security-service` | 3001 | `security`, `audit` | Implemented |
 | `customer-service` | `lavarapido-customer-service` | 3002 | `customer` | Implemented |
-| `booking-service` | — | — | `catalog`, `booking` | Planned |
-| `operations-service` | — | — | `execution` | Planned |
-| `payment-service` | — | — | `promotion`, `payment` | Planned |
-| `notification-service` | — | — | `notification` | Planned |
+| `booking-service` | `lavarapido-booking-service` | 3003 | `catalog`, `booking` | Implemented |
+| `operations-service` | `lavarapido-operation-service` | 3004 | `execution` | Implemented |
+| `payment-service` | `lavarapido-payment-service` (.NET 8) | 3005 | `promotion`, `payment` | Implemented |
+| `notification-service` | `lavarapido-notification-service` | 3006 | `notification` | Implemented |
+| `api-gateway` | `lavarapido-api-gateway` | 8080 | — | Implemented |
 
-The frontend lives in `Front-end-proyecto-web`.
+The web app lives in `Front-end-proyecto-web` and the Android app in `LavadoVehicular-Movil`. The public
+server is described in [`DEPLOY.md`](DEPLOY.md).
 
 ## Folder layout
 
@@ -67,3 +70,23 @@ services never starts two SQL Servers fighting over port 1433.
 - **Errors:** RFC 9457 `application/problem+json` with a stable `code`.
 - **Conventions:** hexagonal architecture (ADR-007), identifiers in English, code comments in
   Spanish, secrets only through environment variables / `.env` — never committed.
+
+## Proyecto LavaRápido
+
+Este repositorio es parte de LavaRápido (Vehicle Washing), proyecto formativo del Tecnólogo en
+Análisis y Desarrollo de Software (ADSO), ficha 3145556, SENA Regional Huila.
+
+| Recurso | Enlace |
+|---|---|
+| Documentación y manuales (ES/EN, MD · PDF · Word) | [lavarapido-docs](https://github.com/BrayanCABRERA123/lavarapido-docs#readme) |
+| Manual técnico | [09_MANUALES/ES/MD/manual-tecnico.md](https://github.com/BrayanCABRERA123/lavarapido-docs/blob/main/09_MANUALES/ES/MD/manual-tecnico.md) |
+| Manual de instalación | [09_MANUALES/ES/MD/manual-de-instalacion.md](https://github.com/BrayanCABRERA123/lavarapido-docs/blob/main/09_MANUALES/ES/MD/manual-de-instalacion.md) |
+| Levantar todo el sistema | [lavarapido-infra](https://github.com/BrayanCABRERA123/lavarapido-infra) (`docker compose --profile app up -d`) |
+| Aplicación desplegada | https://lavarapidovehicular.northcentralus.cloudapp.azure.com |
+
+**Ramas y commits:** se trabaja en `develop` con ramas `feature/`, `fix/` y `docs/` que se
+fusionan con `git merge --no-ff`; los commits siguen Conventional Commits
+(`feat(scope): ...`, `fix(scope): ...`). Detalle en la
+[guía de git del equipo](https://github.com/BrayanCABRERA123/lavarapido-docs#guía-de-git-del-equipo).
+
+**Equipo:** Brayan Estiven Patiño Cabrera, Juan Camilo Guilombo Osorio y Merari Urbano Quintero.
