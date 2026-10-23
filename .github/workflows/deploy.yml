@@ -57,7 +57,8 @@ jobs:
       SOURCE: ${{ inputs.source }}
     steps:
       - name: Quién lo pidió
-        run: echo "Pedido por ${SOURCE:-$GITHUB_EVENT_NAME} (automático: $AUTOMATIC)"
+        run: |
+          echo "Pedido por ${SOURCE:-$GITHUB_EVENT_NAME} (automático: $AUTOMATIC)"
 
       - name: ¿La VM está encendida?
         id: vm
