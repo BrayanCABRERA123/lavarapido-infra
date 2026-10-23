@@ -50,7 +50,8 @@ jobs:
   deploy:
     name: Actualizar servidor
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # puede esperar a otra actualización (hasta 20 min) + reconstruir (10-20) + esperar la salud (8)
+    timeout-minutes: 70
     env:
       # automático: lo pidió otro repo o cambió main de este repo
       AUTOMATIC: ${{ github.event_name == 'push' || inputs.automatic }}
@@ -91,6 +92,7 @@ jobs:
 
       - name: Actualizar
         if: steps.vm.outputs.up == 'true'
+        timeout-minutes: 60
         env:
           SERVICES: ${{ inputs.services }}
         run: ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "azureuser@$HOST" "deploy $SERVICES"
