@@ -31,7 +31,8 @@ fi
 
 LOG="${BACKUP_DIR:-$HOME/lavarapido/backups}/backup.log"
 # bitácora: fecha UTC | acción | resultado | detalle | quién
-log() { printf '%s | RESTAURACIÓN | %s | %s | %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$1" "$2" "${SUDO_USER:-$USER}" >> "$LOG"; }
+# en cron no existe USER (y con set -u el script se caería al anotar): se pregunta a id -un
+log() { printf '%s | RESTAURACIÓN | %s | %s | %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$1" "$2" "${SUDO_USER:-${USER:-$(id -un)}}" >> "$LOG"; }
 what="$(basename "$archive") -> $target"
 trap 'log FALLÓ "$what (error en la línea $LINENO)"' ERR
 
