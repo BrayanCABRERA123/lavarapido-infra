@@ -125,6 +125,29 @@ computador con la llave SSH se puede hacer en un paso:
 ssh -i ~/.ssh/lavarapido_azure azureuser@IP-DEL-VPS 'bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh'
 ```
 
+### Volver a la versión anterior
+
+Antes de reconstruir, `update-server.sh` guarda las imágenes que están corriendo con la etiqueta
+`:prev`. Si una actualización deja algo roto, en el servidor (con `ssh -t`, porque pide confirmar):
+
+```bash
+bash ~/lavarapido/lavarapido-infra/deploy/rollback.sh              # todos los servicios
+bash ~/lavarapido/lavarapido-infra/deploy/rollback.sh web          # solo la web
+```
+
+Muestra de qué fecha es la versión anterior de cada servicio, pide escribir `VOLVER`, espera si hay
+otra actualización corriendo (usa el mismo candado) y recrea esos contenedores sin compilar nada;
+luego espera hasta 8 minutos a que queden sanos. Queda anotado en `~/lavarapido/backups/deploy.log`.
+Si la última actualización falló, el siguiente intento no pisa `:prev`: sigue siendo la última
+versión que funcionó.
+
+- **No toca la base.** Si la versión mala aplicó una migración que la anterior no soporta, además
+  hay que restaurar el respaldo que `update-server.sh` hizo justo antes de actualizar (ver
+  *Respaldos de la base*).
+- **Después hay que arreglar `main`** (revertir el PR o subir la corrección): el siguiente despliegue
+  vuelve a construir lo último de `main`. Mientras tanto, al encender la VM no se reconstruye la
+  versión mala (al volver todo atrás, `deployed-heads` queda con lo que hay en los repos).
+
 ### Desde GitHub (sin SSH)
 
 Con la VM encendida: en este repo, **Actions → Desplegar en Azure → Run workflow**. En
