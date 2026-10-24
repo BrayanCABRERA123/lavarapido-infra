@@ -102,12 +102,13 @@ Secretos que hacen falta (una vez):
 | Repo | Secreto | Qué es |
 |---|---|---|
 | lavarapido-infra | `AZURE_SSH_KEY` | La llave de GitHub para entrar al servidor (ver "Desde GitHub" abajo) |
-| Cada repo que tiene el job **Pedir despliegue** (hoy: web, gateway, security, operations, notification) | `DEPLOY_DISPATCH_TOKEN` | Token *fine-grained* de GitHub con acceso **solo** a `lavarapido-infra` y permiso **Actions: Read and write** (sirve solo para lanzar el despliegue) |
+| Cada repo que tiene el job **Pedir despliegue** (web, gateway, security, customer, booking, operations, notification y payment) | `DEPLOY_DISPATCH_TOKEN` | Token *fine-grained* de GitHub con acceso **solo** a `lavarapido-infra` y permiso **Actions: Read and write** (sirve solo para lanzar el despliegue) |
 
 Si falta `DEPLOY_DISPATCH_TOKEN`, el job **Pedir despliegue** de ese repo sale en rojo y no se despliega.
-customer, booking y payment todavía no tienen ese job: sus cambios llegan a producción con el
-siguiente despliegue de cualquier repo (siempre se baja lo último de todos) o a mano. Para
-agregarlo, su dueño copia el job `deploy` del `ci.yml` de la web y crea el secreto en su repo.
+Los repos de customer, booking y payment no son de Brayan: el secreto lo crea su dueño (o alguien
+con rol Admin) con el mismo token. La app móvil no se despliega en Azure: su `cd.yml` publica una
+actualización OTA al llegar a `main` (secreto `EXPO_TOKEN` del repo del móvil, token de la cuenta de
+Expo) y avisa cuando hace falta un APK nuevo.
 
 **La primera vez** después de fusionar este cambio a `main`, correr el workflow a mano **dos veces**
 con la VM encendida: la primera corre los scripts viejos que tiene el servidor (bajan `develop`); la
