@@ -1,9 +1,10 @@
 {
   "name": "lavarapido-e2e",
   "private": true,
-  "description": "Pruebas entre servicios y mediciones de RNF del entorno local de LavaRápido",
+  "description": "Pruebas entre servicios de LavaRápido: local (lib.js) y contra un despliegue (remote/)",
   "scripts": {
     "flow": "node --test \"*.test.js\"",
+    "remote": "node remote/run.js",
     "performance": "node performance.js",
     "width": "node width-360.js"
   },

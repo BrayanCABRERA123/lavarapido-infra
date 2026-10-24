@@ -1,0 +1,81 @@
+# Botón "Run workflow" para correr la batería e2e (e2e/remote) contra un despliegue, por ejemplo el
+# de Azure. No corre sola en cada push: con las banderas crea datos de prueba y, con el límite de
+# /auth, deja la IP del runner bloqueada un rato. Sin banderas solo lee y prueba rechazos.
+# Las cuentas de prueba salen de los secretos E2E_* del repositorio (ver e2e/README.md).
+name: E2E contra un despliegue
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'URL del sitio, sin /api'
+        required: true
+        default: 'https://lavarapidovehicular.northcentralus.cloudapp.azure.com'
+      files:
+        description: 'Archivos separados por espacio (vacío = todos): access roles full-flow booking-status signup'
+        required: false
+        default: ''
+      allow_writes:
+        description: 'Crear reservas, vehículos, cupones y pagos de prueba (E2E_ALLOW_WRITES)'
+        type: boolean
+        default: false
+      allow_signup:
+        description: 'Registrar cuentas nuevas con alias de E2E_SIGNUP_EMAIL (E2E_ALLOW_SIGNUP)'
+        type: boolean
+        default: false
+      rate_limit:
+        description: 'Probar el límite de /auth al final (E2E_RATE_LIMIT; bloquea la IP del runner un rato)'
+        type: boolean
+        default: false
+
+# una corrida a la vez contra el mismo sitio: dos a la vez se pisarían las horas libres
+concurrency:
+  group: e2e-${{ inputs.base_url }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Batería e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Correr la batería
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          FILES: ${{ inputs.files }}
+          E2E_ALLOW_WRITES: ${{ inputs.allow_writes && '1' || '0' }}
+          E2E_ALLOW_SIGNUP: ${{ inputs.allow_signup && '1' || '0' }}
+          E2E_RATE_LIMIT: ${{ inputs.rate_limit && '1' || '0' }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
+          E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+          E2E_OPERATOR_EMAIL: ${{ secrets.E2E_OPERATOR_EMAIL }}
+          E2E_OPERATOR_PASSWORD: ${{ secrets.E2E_OPERATOR_PASSWORD }}
+          E2E_SIGNUP_EMAIL: ${{ secrets.E2E_SIGNUP_EMAIL }}
+          E2E_SECOND_OPERATOR_ID: ${{ vars.E2E_SECOND_OPERATOR_ID }}
+        run: |
+          # los datos del formulario llegan por variables, nunca pegados en el comando
+          if [[ ! "$BASE_URL" =~ ^https?://[A-Za-z0-9.:-]+/?$ ]]; then
+            echo "::error::base_url debe ser solo la dirección del sitio, por ejemplo https://midominio.com"
+            exit 1
+          fi
+          if [[ ! "$FILES" =~ ^[a-z\ -]*$ ]]; then
+            echo "::error::files solo admite nombres como: access roles full-flow booking-status signup"
+            exit 1
+          fi
+          if [ -z "$E2E_ADMIN_EMAIL" ] || [ -z "$E2E_CLIENT_EMAIL" ] || [ -z "$E2E_OPERATOR_EMAIL" ]; then
+            echo "::error::Faltan los secretos E2E_* (Settings → Secrets and variables → Actions). Ver e2e/README.md."
+            exit 1
+          fi
+          # shellcheck disable=SC2086 # FILES se separa en varios argumentos a propósito
+          node e2e/remote/run.js $FILES
