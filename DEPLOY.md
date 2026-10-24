@@ -177,7 +177,12 @@ tocar la base real. La base usa el modelo de recuperación `SIMPLE` (lo pone `db
 respaldos completos no hacen falta respaldos del registro de transacciones.
 
 Las restauraciones nunca son automáticas: volver a un respaldo borra lo que pasó después, así
-que siempre lo decide una persona.
+que siempre lo decide una persona. Para reemplazar la base, `restore-db.sh` muestra de qué fecha es
+el respaldo y pide escribir `RESTAURAR` (hay que estar en una terminal: `ssh -t`). Espera si hay una
+actualización en curso (mismo candado que el despliegue), guarda un respaldo de cómo estaba la base,
+detiene los servicios, restaura, vuelve a correr las migraciones de payment (`payment-migrate`, que
+no se aplican solas al arrancar) y levanta los servicios. Si algo falla a mitad, igual los vuelve a
+levantar.
 
 ```bash
 bash ~/lavarapido/lavarapido-infra/deploy/backup-db.sh                       # respaldar ya
