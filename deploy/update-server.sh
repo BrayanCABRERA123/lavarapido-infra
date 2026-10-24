@@ -32,6 +32,23 @@ if sudo docker ps --format '{{.Names}}' | grep -qx lavarapido-sqlserver; then
   fi
 fi
 
+# antes de reconstruir, la versión que está corriendo se guarda como :prev para poder volver a ella
+# con deploy/rollback.sh. Mientras exista update-pending (la última actualización no terminó bien)
+# no se pisa: así :prev sigue siendo la última versión que funcionó.
+IMAGES=(web security-service customer-service booking-service operations-service
+  notification-service payment-service api-gateway)
+PENDING="$ROOT/backups/update-pending"
+mkdir -p "$ROOT/backups"
+if [ ! -e "$PENDING" ]; then
+  echo "== Guardando la versión actual como :prev (deploy/rollback.sh)"
+  for name in "${IMAGES[@]}"; do
+    if sudo docker image inspect "lavarapido/$name:local" > /dev/null 2>&1; then
+      sudo docker tag "lavarapido/$name:local" "lavarapido/$name:prev"
+    fi
+  done
+fi
+date -u +%Y-%m-%dT%H:%M:%SZ > "$PENDING"
+
 echo "== Construyendo y levantando: ${*:-todos los servicios}"
 "${COMPOSE[@]}" up -d --build "$@"
 
@@ -80,4 +97,6 @@ if [ "$#" -eq 0 ]; then
   mkdir -p "$ROOT/backups"
   bash "$INFRA/deploy/repo-heads.sh" "$ROOT" > "$ROOT/backups/deployed-heads"
 fi
+# terminó bien: la próxima actualización vuelve a guardar lo que corre ahora como :prev
+rm -f "$PENDING"
 echo "Listo: todos los servicios están sanos."
