@@ -89,6 +89,9 @@ Abre `.env` y llena:
   [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
   ```
   Todos los servicios de **tu** PC usan la misma, porque la leen del mismo `.env`.
+- **`INTERNAL_API_KEY`**: la llave entre servicios. **Sin ella el operario no puede iniciar ni
+  terminar servicios** (la API responde 503) y no hay asignación automática. No trae valor por
+  defecto: genera otra llave con el mismo comando de `JWT_SECRET` (un valor distinto).
 
 > ⚠️ El `.env` **nunca se sube** a GitHub (ya está en `.gitignore`). Cada quien tiene el suyo.
 
@@ -407,6 +410,7 @@ En `lavarapido-infra/docker-compose.yml` copien el bloque `security-service` y c
 | `Port 3001 was already in use` | Ya hay otra copia del servicio corriendo | `Get-NetTCPConnection -LocalPort 3001 -State Listen` y cerrar ese proceso (`Stop-Process -Id <id>`) si es un `java.exe` |
 | `Connection refused ... port 1433` | SQL Server apagado | Abrir Docker Desktop y `docker compose up -d` en `lavarapido-infra` |
 | `security.jwt.secret ... must be set` | Falta el `.env` o el `JWT_SECRET` es corto | Revisar `lavarapido-infra/.env` (sección 3.2) |
+| El operario no puede iniciar ni terminar un servicio (error 503) | Falta `INTERNAL_API_KEY` en el `.env` | Ponerla en `lavarapido-infra/.env` (sección 3.2) y reiniciar booking-service y operation-service |
 | El login dice "No hay conexión con el servidor" | El servicio no está corriendo, o `ng serve` se abrió antes de tener el proxy | Levantar el servicio y reiniciar `ng serve` |
 | SQL Server no arranca en Docker | `DB_PASSWORD` muy débil | Poner una más fuerte en `.env` y `docker compose down -v` + `up -d` |
 | `mvnw` no se reconoce | Estás en PowerShell | Usar `.\mvnw.cmd` |
