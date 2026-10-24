@@ -73,9 +73,9 @@ jobs:
           # el SSH no responde: si el sitio sí responde por HTTPS, la VM está encendida y lo que falla es
           # el acceso (sshd o la regla del puerto 22 en Azure). Eso nunca pasa por "VM apagada", ni en
           # los automáticos, porque al encender no habría un arranque que la ponga al día
-          site=$(curl -s -o /dev/null --max-time 15 -w '%{http_code}' "$SITE/" || true)
-          if [ "$site" != 000 ]; then
-            echo "::error::La VM está encendida (el sitio responde $site por HTTPS) pero el SSH (puerto 22) no: no se desplegó. Revisa sshd y la regla del puerto 22 en Azure, y vuelve a correr este workflow."
+          site_status=$(curl -s -o /dev/null --max-time 15 -w '%{http_code}' "$SITE/" || true)
+          if [ "$site_status" != 000 ]; then
+            echo "::error::La VM está encendida (el sitio responde $site_status por HTTPS) pero el SSH (puerto 22) no: no se desplegó. Revisa sshd y la regla del puerto 22 en Azure, y vuelve a correr este workflow."
             exit 1
           fi
           if [ "$AUTOMATIC" = true ]; then
