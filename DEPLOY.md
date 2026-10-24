@@ -177,6 +177,25 @@ Se configura una vez:
 Para revocarla basta con borrar esa línea de `authorized_keys`. Si la VM cambia (otra IP u otro
 servidor), hay que actualizar `HOST` y `KNOWN_HOST` en `.github/workflows/deploy.yml`.
 
+#### Recomendado: que solo `main` pueda usar la llave (Environment `produccion`)
+
+Hoy `AZURE_SSH_KEY` es un secreto **del repo**: un workflow de cualquier rama de este repo podría
+usarlo y entrar al servidor. Con un *Environment* limitado a `main`, GitHub solo entrega la llave
+a los despliegues que corren desde `main`. **Todavía no está creado.** Lo hace un admin del repo,
+en este orden (así el despliegue no queda sin llave en ningún momento):
+
+1. **Settings → Environments → New environment**, nombre `produccion`.
+2. En **Deployment branches and tags**: *Selected branches and tags* → **Add deployment branch or
+   tag rule** → `main`. (Opcional: *Required reviewers*; entonces cada despliegue, también los
+   automáticos, espera a que alguien lo apruebe en Actions.)
+3. En ese environment: **Environment secrets → Add environment secret**, nombre `AZURE_SSH_KEY`, con
+   la misma llave privada. Por ahora no se borra el secreto del repo.
+4. En `.github/workflows/deploy.yml`, en el job `deploy`, una línea debajo de `runs-on`:
+   `environment: produccion`. Se fusiona a `main` con un PR como cualquier cambio.
+5. Correr **Desplegar en Azure** a mano desde `main` y revisar que pase *Preparar la llave*. Desde
+   otra rama debe fallar con *Branch "…" is not allowed to deploy to produccion*.
+6. Recién entonces borrar el secreto `AZURE_SSH_KEY` del repo (**Secrets and variables → Actions**).
+
 ## Integración continua (GitHub Actions)
 
 Cada repo tiene `.github/workflows/ci.yml`, que corre en cada push o pull request a `develop` y
