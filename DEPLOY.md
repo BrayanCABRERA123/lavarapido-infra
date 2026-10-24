@@ -239,6 +239,33 @@ huella nueva que hay que poner.
 
 ## Pendiente para un despliegue más robusto
 
-- Usuario propio de base de datos en vez de `sa`.
+- Usuario propio de base de datos en vez de `sa` (ver el riesgo aceptado abajo).
 - Copias de seguridad del volumen `sqlserver-data`.
 - Construir las imágenes en CI y publicarlas en un registro, para no compilar en el servidor.
+
+### Riesgo aceptado: todos los servicios entran a la base con `sa` (H-10)
+
+**Qué pasa.** Los 7 servicios, `payment-migrate` y los scripts de respaldo usan el mismo usuario
+`sa`, que es administrador de todo SQL Server. Si un servicio tuviera una falla que dejara ejecutar
+SQL (p. ej. una inyección), desde ahí se podrían leer o borrar los esquemas de los demás servicios,
+o la base completa. La separación por esquemas (ADR-009) hoy la respeta el código, no la base.
+
+**Por qué se acepta para la entrega.** SQL Server no queda expuesto: en producción no publica el
+1433, solo se llega por la red interna de Docker. La contraseña de `sa` está solo en
+`.env.production` del servidor (no en Git). Y hay respaldo diario verificado, más uno antes de
+cada actualización. Cambiar los permisos de 7 servicios a días de la exposición es más riesgoso
+que dejarlo así.
+
+**Cambio propuesto (no aplicado; no antes de la exposición).** Un usuario por servicio, dueño solo
+de su esquema:
+
+1. Un script SQL que corre una vez con `sa`: por cada servicio, `CREATE LOGIN` y `CREATE USER` con
+   `DEFAULT_SCHEMA` = su esquema, `ALTER AUTHORIZATION ON SCHEMA::<esquema>` a ese usuario y
+   `GRANT CREATE TABLE, CREATE VIEW, CREATE PROCEDURE` (Liquibase crea y cambia sus tablas).
+2. Las tablas de control de Liquibase (`DATABASECHANGELOG_<SERVICIO>`, hoy en `dbo`) pasan al
+   esquema de cada servicio (`spring.liquibase.liquibase-schema`; en payment-migrate,
+   `--liquibase-schema-name`), o se le da a cada usuario permiso solo sobre las suyas en `dbo`.
+3. En `docker-compose.prod.yml`, `DB_USERNAME`/`DB_PASSWORD` distintos por servicio
+   (`DB_PASSWORD_BOOKING`, …) en `.env.production`. `sa` queda solo para `db-init` y los scripts
+   de respaldo y restauración, que necesitan permisos de administrador.
+4. Probarlo antes sobre una copia (`restore-db.sh <respaldo> --as LavaRapido_prueba`).
