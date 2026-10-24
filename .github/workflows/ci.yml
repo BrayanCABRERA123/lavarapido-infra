@@ -1,4 +1,4 @@
-# Revisa los scripts de despliegue, los archivos de Docker Compose y las pruebas e2e en cada push o
+# Revisa los scripts de despliegue, los workflows, los archivos de Docker Compose y las pruebas e2e en cada push o
 # pull request a develop/main. No levanta servicios: solo que todo sea válido.
 name: CI
 
@@ -30,8 +30,17 @@ jobs:
 
       - name: Scripts de despliegue
         run: |
-          for f in deploy/*.sh; do bash -n "$f" && echo "ok $f"; done
+          # se revisan todos y el paso falla si falla cualquiera (con "&&" solo contaba el último)
+          failed=0
+          for f in deploy/*.sh; do
+            if bash -n "$f"; then echo "ok $f"; else echo "::error file=$f::error de sintaxis"; failed=1; fi
+          done
           shellcheck --severity=error deploy/*.sh
+          exit "$failed"
+
+      # sintaxis de los workflows, expresiones ${{ }} y, con shellcheck, los run: de cada paso
+      - name: Workflows (actionlint)
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
 
       - name: Docker Compose (local y producción)
         run: |
@@ -39,4 +48,4 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app config --quiet
 
       - name: Pruebas e2e (sintaxis)
-        run: for f in e2e/*.js; do node --check "$f"; done
+        run: for f in e2e/*.js e2e/remote/*.js; do node --check "$f"; done
