@@ -74,8 +74,15 @@ boot="bash $ROOT/lavarapido-infra/deploy/boot-update.sh >> $ROOT/backups/deploy.
 sync_repo() {
   local url="$1" name="$2" branch="$3"
   if [ -d "$name/.git" ]; then
-    git -C "$name" fetch --quiet origin &&
-      git -C "$name" checkout --quiet "$branch" &&
+    git -C "$name" fetch --quiet origin || return 1
+    # nunca se baja de versión: si lo desplegado no está contenido en la rama pedida (p. ej. cambiar
+    # de develop a un main que todavía no tiene el release) se detiene sin tocar nada.
+    # ALLOW_DOWNGRADE=1 lo permite a propósito
+    if ! git -C "$name" merge-base --is-ancestor HEAD "origin/$branch"; then
+      echo "  $name: lo desplegado no está en origin/$branch; no se baja de versión (ALLOW_DOWNGRADE=1 para forzarlo)"
+      [ "${ALLOW_DOWNGRADE:-0}" = 1 ] || return 1
+    fi
+    git -C "$name" checkout --quiet "$branch" &&
       git -C "$name" pull --quiet --ff-only origin "$branch"
   else
     git clone --quiet --branch "$branch" "$url" "$name"
