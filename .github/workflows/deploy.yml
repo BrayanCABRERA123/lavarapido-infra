@@ -6,6 +6,7 @@
 #   3. Solo, cuando cambia main de este repo (compose o scripts de deploy/).
 # Si la VM está apagada, un despliegue automático no falla: queda el aviso y la VM se pone al día
 # sola al encenderse (deploy/boot-update.sh). Uno manual sí falla, para que se sepa que hay que prenderla.
+# Si el sitio responde por HTTPS pero el SSH no, la VM está encendida: falla siempre (no es "apagada").
 # La llave AZURE_SSH_KEY solo puede ejecutar deploy/ci-deploy.sh en el servidor: no abre una terminal.
 name: Desplegar en Azure
 
@@ -69,6 +70,14 @@ jobs:
             exit 0
           fi
           echo "up=false" >> "$GITHUB_OUTPUT"
+          # el SSH no responde: si el sitio sí responde por HTTPS, la VM está encendida y lo que falla es
+          # el acceso (sshd o la regla del puerto 22 en Azure). Eso nunca pasa por "VM apagada", ni en
+          # los automáticos, porque al encender no habría un arranque que la ponga al día
+          site=$(curl -s -o /dev/null --max-time 15 -w '%{http_code}' "$SITE/" || true)
+          if [ "$site" != 000 ]; then
+            echo "::error::La VM está encendida (el sitio responde $site por HTTPS) pero el SSH (puerto 22) no: no se desplegó. Revisa sshd y la regla del puerto 22 en Azure, y vuelve a correr este workflow."
+            exit 1
+          fi
           if [ "$AUTOMATIC" = true ]; then
             echo "::warning::La VM está apagada: no se desplegó ahora. Al encenderla se actualiza sola con lo último de main (deploy/boot-update.sh)."
             exit 0
@@ -100,10 +109,11 @@ jobs:
       - name: Comprobar que responde
         if: steps.vm.outputs.up == 'true'
         run: |
-          # los servicios Java tardan 1-2 minutos en arrancar después de reconstruirse
-          for i in $(seq 1 30); do
-            api=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/api/v1/catalog/services" || true)
-            web=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/" || true)
+          # los servicios Java tardan 1-2 minutos en arrancar después de reconstruirse. --max-time: una
+          # conexión colgada no deja el paso esperando sin fin
+          for _ in $(seq 1 30); do
+            api=$(curl -s -o /dev/null --max-time 10 -w '%{http_code}' "$SITE/api/v1/catalog/services" || true)
+            web=$(curl -s -o /dev/null --max-time 10 -w '%{http_code}' "$SITE/" || true)
             if [ "$api" = 200 ] && [ "$web" = 200 ]; then
               echo "Web y API responden 200"
               exit 0
@@ -111,5 +121,9 @@ jobs:
             echo "Esperando a los servicios (web $web, api $api)..."
             sleep 10
           done
-          echo "::error::El servidor se actualizó pero la web o la API no responden después de 5 minutos."
+          echo "::error::El servidor se actualizó pero la web o la API no responden 200 después de 30 intentos (unos 5 minutos)."
+          # qué respondió la API, para saber por qué: --fail-with-body muestra el error del servidor
+          echo "Respuesta de $SITE/api/v1/catalog/services:"
+          curl -sS --max-time 10 --fail-with-body "$SITE/api/v1/catalog/services" | head -c 2000 || true
+          echo
           exit 1

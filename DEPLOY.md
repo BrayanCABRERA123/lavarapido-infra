@@ -81,8 +81,10 @@ Lo normal es no hacer nada a mano: cuando un PR aprobado entra a `main`, se desp
    que cambió. Si ya hay otra actualización corriendo (p. ej. la del arranque de la VM), espera a
    que termine (hasta 20 min) y después actualiza igual. Luego espera a que **todos** los
    contenedores queden sanos (hasta 8 min): si alguno no arranca, el workflow sale en rojo y dice
-   cuál. Al final comprueba que la web y la API respondan 200.
-3. Si la VM está **apagada**, el workflow deja un aviso y **no falla**. Al encender la VM,
+   cuál. Al final comprueba que la web y la API respondan 200; si no, muestra lo que respondió la API.
+3. Si la VM está **apagada** (no responden ni el SSH ni el sitio por HTTPS), el workflow deja un
+   aviso y **no falla**. Si el sitio responde pero el SSH no, la VM está encendida y el workflow sale
+   en rojo (hay que revisar `sshd` o la regla del puerto 22 en Azure). Al encender la VM,
    `deploy/boot-update.sh` (tarea `@reboot` que instala `setup-server.sh`) baja lo nuevo de `main` y
    actualiza si hay algo sin desplegar: lo que entró mientras estaba apagada, o lo que quedó a medias
    porque la última actualización falló (compara contra `~/lavarapido/backups/deployed-heads`, que se
@@ -90,6 +92,10 @@ Lo normal es no hacer nada a mano: cuando un PR aprobado entra a `main`, se desp
    reconstruye. El resultado queda en `~/lavarapido/backups/deploy.log`.
 4. Un cambio en `main` de este repo (compose o `deploy/`) también despliega solo. Si cambia el
    `Caddyfile`, Caddy se reinicia para leerlo.
+
+El ✓ de **Pedir despliegue** en el repo que cambió solo dice que el pedido llegó. Si el despliegue
+falla, el ✗ sale en **Actions → Desplegar en Azure** de este repo, y el correo de GitHub le llega a
+quien es dueño del `DEPLOY_DISPATCH_TOKEN` (hoy Brayan): hay que mirar ahí.
 
 Secretos que hacen falta (una vez):
 
