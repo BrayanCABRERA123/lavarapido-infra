@@ -163,7 +163,7 @@ Cada repo tiene `.github/workflows/ci.yml`, que corre en cada push o pull reques
 | payment-service | `dotnet build` y `dotnet test` (.NET 8; las de integración se omiten sin SQL Server) |
 | Front-end-proyecto-web | Compilación de producción y `ng test` |
 | LavadoVehicular-Movil | `tsc --noEmit` (el APK se sigue generando con EAS) |
-| lavarapido-infra | Sintaxis y `shellcheck` de `deploy/*.sh`, `docker compose config` y sintaxis de `e2e/` |
+| lavarapido-infra | Sintaxis y `shellcheck` de `deploy/*.sh`, `actionlint` de `.github/workflows`, `docker compose config` y sintaxis de `e2e/` |
 
 El resultado aparece como ✓ o ✗ junto a cada commit en GitHub.
 

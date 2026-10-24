@@ -104,7 +104,10 @@ jobs:
         timeout-minutes: 60
         env:
           SERVICES: ${{ inputs.services }}
-        run: ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "azureuser@$HOST" "deploy $SERVICES"
+        run: |
+          # SERVICES se expande aquí a propósito: el servidor lo recibe en SSH_ORIGINAL_COMMAND y ci-deploy.sh lo valida
+          # shellcheck disable=SC2029
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "azureuser@$HOST" "deploy $SERVICES"
 
       - name: Comprobar que responde
         if: steps.vm.outputs.up == 'true'
