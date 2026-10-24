@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Respaldo completo de la base LavaRapido en el servidor.
 #
-#   bash ~/lavarapido/lavarapido-infra/deploy/backup-db.sh
+#   bash ~/lavarapido/lavarapido-infra/deploy/backup-db.sh               (respaldo normal)
+#   bash ~/lavarapido/lavarapido-infra/deploy/backup-db.sh pre-update    (con etiqueta)
 #
 # Deja ~/lavarapido/backups/LavaRapido-AAAAMMDD-HHMMSS.bak.gz (comprimido, solo lo lee azureuser)
-# y conserva los últimos BACKUP_KEEP (14 por defecto). Cada respaldo, bien o mal, queda anotado en
+# y conserva los últimos BACKUP_KEEP (14 por defecto). Con etiqueta (update-server.sh usa pre-update)
+# queda LavaRapido-<etiqueta>-AAAAMMDD-HHMMSS.bak.gz y se cuenta aparte: se guardan los últimos
+# BACKUP_KEEP_LABELED (10) de esa etiqueta, así muchos despliegues seguidos no borran los diarios.
+# Cada respaldo, bien o mal, queda anotado en
 # ~/lavarapido/backups/backup.log (lo mismo hacen restore-db.sh y verify-backup.sh). Lo corren
 # solos update-server.sh antes de actualizar, la tarea diaria y el arranque de la VM
 # (setup-server.sh los programa).
@@ -20,6 +24,9 @@ KEEP="${BACKUP_KEEP:-14}"
 DB="${DB_NAME:-LavaRapido}"
 CONTAINER=lavarapido-sqlserver
 INSIDE=/var/opt/mssql/backup
+LABEL="${1:-}"
+[[ "$LABEL" =~ ^[a-z][a-z-]*$ || -z "$LABEL" ]] || { echo "Etiqueta inválida: $LABEL (solo minúsculas y guiones)"; exit 1; }
+if [ -n "$LABEL" ]; then KEEP="${BACKUP_KEEP_LABELED:-10}"; fi
 
 mkdir -p "$DEST"
 chmod 700 "$DEST"
@@ -36,7 +43,7 @@ sql() {
 }
 
 stamp="$(date -u +%Y%m%d-%H%M%S)"
-file="$DB-$stamp.bak"
+file="$DB-${LABEL:+$LABEL-}$stamp.bak"
 
 sudo docker exec "$CONTAINER" mkdir -p "$INSIDE"
 # el archivo temporal dentro del contenedor se borra siempre, también si algo falla
@@ -52,8 +59,13 @@ sudo chown "$(id -u):$(id -g)" "$DEST/$file"
 gzip -f "$DEST/$file"
 chmod 600 "$DEST/$file.gz"
 
-# solo los últimos KEEP
-ls -1t "$DEST/$DB"-*.bak.gz | tail -n +"$((KEEP + 1))" | xargs -r rm -f
+# solo los últimos KEEP de su mismo tipo: los normales empiezan por la fecha (LavaRapido-2026…), así
+# no se cuentan ni se borran los que tienen etiqueta, y al revés
+if [ -n "$LABEL" ]; then
+  ls -1t "$DEST/$DB-$LABEL-"[0-9]*.bak.gz | tail -n +"$((KEEP + 1))" | xargs -r rm -f
+else
+  ls -1t "$DEST/$DB-"[0-9]*.bak.gz | tail -n +"$((KEEP + 1))" | xargs -r rm -f
+fi
 
 size="$(du -h "$DEST/$file.gz" | cut -f1)"
 log OK "$file.gz ($size)"
