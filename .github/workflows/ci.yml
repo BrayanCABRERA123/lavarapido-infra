@@ -39,4 +39,4 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app config --quiet
 
       - name: Pruebas e2e (sintaxis)
-        run: for f in e2e/*.js; do node --check "$f"; done
+        run: for f in e2e/*.js e2e/remote/*.js; do node --check "$f"; done
