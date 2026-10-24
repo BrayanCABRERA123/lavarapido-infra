@@ -87,6 +87,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       CORS_ALLOWED_ORIGINS: *public-origin
+      # pregunta a booking por /internal si el vehículo tiene reservas activas antes de retirarlo (BIZ-08)
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
 
   booking-service:
     <<: *java-limits

@@ -161,6 +161,12 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       # de aquí saca el person_id cuando el evento de registro no llegó (REST, ADR-004)
       SECURITY_SERVICE_URL: http://security-service:3001/api/v1
+      # antes de retirar un vehículo le pregunta a booking si tiene reservas activas
+      # (GET /internal/v1/bookings/active-count con la llave entre servicios, BIZ-08).
+      # Vacía la llave: booking rechaza la pregunta y retirar un vehículo no funciona.
+      # Es la raíz del servicio, sin /api/v1: la ruta /internal/v1/... va desde ahí.
+      BOOKING_SERVICE_URL: http://booking-service:3003
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       # escucha security.user_registered para crear el perfil del cliente
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
