@@ -16,7 +16,8 @@ DB="${DB_NAME:-LavaRapido}"
 TEST_DB="${DB}_verificacion"
 CONTAINER=lavarapido-sqlserver
 
-log() { printf '%s | VERIFICACIÓN | %s | %s | %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$1" "$2" "${SUDO_USER:-$USER}" >> "$DEST/backup.log"; }
+# en cron no existe USER (y con set -u el script se caería al anotar): se pregunta a id -un
+log() { printf '%s | VERIFICACIÓN | %s | %s | %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$1" "$2" "${SUDO_USER:-${USER:-$(id -un)}}" >> "$DEST/backup.log"; }
 # un error inesperado (p. ej. sqlcmd falla al contar las tablas) también queda en la bitácora
 trap 'log FALLÓ "${name:-último respaldo}: error en la línea $LINENO"' ERR
 

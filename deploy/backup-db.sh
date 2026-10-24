@@ -24,7 +24,8 @@ INSIDE=/var/opt/mssql/backup
 mkdir -p "$DEST"
 chmod 700 "$DEST"
 # bitácora: fecha UTC | acción | resultado | detalle | quién
-log() { printf '%s | RESPALDO | %s | %s | %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$1" "$2" "${SUDO_USER:-$USER}" >> "$DEST/backup.log"; }
+# en cron no existe USER (y con set -u el script se caería al anotar): se pregunta a id -un
+log() { printf '%s | RESPALDO | %s | %s | %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$1" "$2" "${SUDO_USER:-${USER:-$(id -un)}}" >> "$DEST/backup.log"; }
 trap 'log FALLÓ "error en la línea $LINENO"' ERR
 
 PASSWORD="$(grep '^DB_PASSWORD=' "$INFRA/.env.production" | cut -d= -f2-)"
