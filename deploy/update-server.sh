@@ -23,10 +23,11 @@ fi
 cd "$INFRA"
 COMPOSE=(sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --profile app)
 
-# antes de cambiar nada se respalda la base: si una migración nueva sale mal, se puede volver
+# antes de cambiar nada se respalda la base: si una migración nueva sale mal, se puede volver.
+# Va con la etiqueta pre-update, que se cuenta aparte: muchos despliegues seguidos no borran los diarios
 if sudo docker ps --format '{{.Names}}' | grep -qx lavarapido-sqlserver; then
   echo "== Respaldo de la base antes de actualizar"
-  if ! bash "$INFRA/deploy/backup-db.sh"; then
+  if ! bash "$INFRA/deploy/backup-db.sh" pre-update; then
     echo "No se actualizó el servidor: el respaldo falló (revisa el error de arriba)."
     exit 1
   fi
@@ -99,4 +100,12 @@ if [ "$#" -eq 0 ]; then
 fi
 # terminó bien: la próxima actualización vuelve a guardar lo que corre ahora como :prev
 rm -f "$PENDING"
+
+# cada reconstrucción deja sin etiqueta la imagen de antes de :prev y suma caché de compilación:
+# sin limpiar, el disco se llena. Se borran las imágenes sin etiqueta que nadie usa (:local y :prev
+# se conservan) y la caché sin usar hace más de 7 días. Si la limpieza falla, la actualización igual
+# quedó bien.
+echo "== Limpiando imágenes viejas"
+sudo docker image prune -f > /dev/null || echo "  no se pudieron borrar las imágenes viejas (se reintenta en la próxima)"
+sudo docker builder prune -f --filter until=168h > /dev/null || echo "  no se pudo limpiar la caché de compilación"
 echo "Listo: todos los servicios están sanos."

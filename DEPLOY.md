@@ -118,7 +118,9 @@ bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh web      # solo la we
 bash ~/lavarapido/lavarapido-infra/deploy/update-server.sh notification-service security-service
 ```
 
-Baja los repos y reconstruye; lo que no cambió se reutiliza. Los datos se conservan. Desde un
+Baja los repos y reconstruye; lo que no cambió se reutiliza. Los datos se conservan. Si todo queda
+sano, borra las imágenes viejas que ya no usa nadie (se conservan la actual y `:prev`) y la caché de
+compilación sin usar hace más de 7 días, para que el disco no se llene. Desde un
 computador con la llave SSH se puede hacer en un paso:
 
 ```bash
@@ -142,8 +144,8 @@ Si la última actualización falló, el siguiente intento no pisa `:prev`: sigue
 versión que funcionó.
 
 - **No toca la base.** Si la versión mala aplicó una migración que la anterior no soporta, además
-  hay que restaurar el respaldo que `update-server.sh` hizo justo antes de actualizar (ver
-  *Respaldos de la base*).
+  hay que restaurar el respaldo que `update-server.sh` hizo justo antes de actualizar
+  (`LavaRapido-pre-update-…`, ver *Respaldos de la base*).
 - **Después hay que arreglar `main`** (revertir el PR o subir la corrección): el siguiente despliegue
   vuelve a construir lo último de `main`. Mientras tanto, al encender la VM no se reconstruye la
   versión mala (al volver todo atrás, `deployed-heads` queda con lo que hay en los repos).
@@ -187,11 +189,16 @@ El resultado aparece como ✓ o ✗ junto a cada commit en GitHub.
 ### Respaldos de la base
 
 `deploy/backup-db.sh` hace un respaldo completo de `LavaRapido`, lo verifica y lo deja comprimido
-en `~/lavarapido/backups/` (se guardan los últimos 14). Corre solo en tres momentos:
+en `~/lavarapido/backups/`. Corre solo en tres momentos:
 
-- antes de cada `update-server.sh` (si falla, no se actualiza);
+- antes de cada `update-server.sh` (si falla, no se actualiza). Estos se llaman
+  `LavaRapido-pre-update-AAAAMMDD-HHMMSS.bak.gz` y se cuentan aparte: se guardan los últimos 10, así
+  un día con muchos despliegues no borra los respaldos diarios;
 - 5 minutos después de encender la VM;
 - todos los días a las 23:00 UTC (6 p. m. en Colombia), si la VM está encendida.
+
+De los normales (`LavaRapido-AAAAMMDD-HHMMSS.bak.gz`: estos dos, los que se hacen a mano y el de antes
+de restaurar) se guardan los últimos 14.
 
 `setup-server.sh` programa los dos últimos en el `crontab` de `azureuser` y, después de cada uno,
 `deploy/verify-backup.sh`: restaura el último respaldo como `LavaRapido_verificacion`, revisa que
