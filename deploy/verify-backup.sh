@@ -6,8 +6,9 @@
 # Restaura el respaldo más reciente como LavaRapido_verificacion (restore-db.sh --as), revisa que
 # tenga las mismas tablas que la base real y que se puedan leer, y la borra. El resultado queda en
 # ~/lavarapido/backups/backup.log. Corre solo después de cada respaldo programado (setup-server.sh).
-# -E: la trampa ERR también salta si el error ocurre dentro de una función (sql)
-set -Eeuo pipefail
+# sin -E a propósito: los conteos llaman a value() dentro de $(...), y con -E la trampa ERR de abajo
+# saltaría también en esa subshell y anotaría el mismo error varias veces
+set -euo pipefail
 
 INFRA="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="${BACKUP_DIR:-$HOME/lavarapido/backups}"
@@ -16,6 +17,8 @@ TEST_DB="${DB}_verificacion"
 CONTAINER=lavarapido-sqlserver
 
 log() { printf '%s | VERIFICACIÓN | %s | %s | %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$1" "$2" "${SUDO_USER:-$USER}" >> "$DEST/backup.log"; }
+# un error inesperado (p. ej. sqlcmd falla al contar las tablas) también queda en la bitácora
+trap 'log FALLÓ "${name:-último respaldo}: error en la línea $LINENO"' ERR
 
 PASSWORD="$(grep '^DB_PASSWORD=' "$INFRA/.env.production" | cut -d= -f2-)"
 value() {
