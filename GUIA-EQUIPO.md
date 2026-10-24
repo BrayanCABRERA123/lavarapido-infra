@@ -82,8 +82,8 @@ copy .env.example .env
 Abre `.env` y llena:
 
 - **`DB_PASSWORD`**: la contraseña que quieras para SQL Server. Debe tener mínimo 8 caracteres
-  con mayúscula, minúscula, número y símbolo (ej. `Lavado_Local2026!`). Si es débil, SQL Server
-  no arranca.
+  con mayúscula, minúscula, número y símbolo. Invéntala tú: no copies una de un documento,
+  porque quedaría igual en el PC de todos. Si es débil, SQL Server no arranca.
 - **`JWT_SECRET`**: una llave larga (mínimo 32 caracteres). Puedes generarla con:
   ```powershell
   [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
@@ -185,7 +185,8 @@ El código dura 15 minutos, sirve una sola vez y se bloquea después de 5 intent
 
 ### Reglas de contraseña
 
-Mínimo 8 caracteres, una mayúscula, un número y un carácter especial (ej. `Lavado2026!`).
+Mínimo 8 caracteres, una mayúscula, un número y un carácter especial. (Aquí no va un ejemplo a
+propósito: una contraseña escrita en un documento termina usándola todo el equipo.)
 
 ---
 
@@ -232,9 +233,9 @@ el puerto del servicio como en la tabla de arriba, o a través del 8080 con la m
 
 1. Abre `POST /api/v1/auth/login` → **Try it out** → cuerpo:
    ```json
-   { "email": "admin@gmail.com", "password": "Admin123!" }
+   { "email": "admin@gmail.com", "password": "<la de DEMO_ADMIN_PASSWORD en tu .env>" }
    ```
-   → **Execute**.
+   → **Execute**. (La cuenta existe solo si definiste `DEMO_ADMIN_PASSWORD`, ver sección 5.)
 2. Copia el `accessToken` de la respuesta.
 3. Botón **Authorize** (arriba a la derecha) → pega el token → **Authorize**.
 4. Ya puedes ejecutar cualquier endpoint, por ejemplo `GET /api/v1/admin/users`.
