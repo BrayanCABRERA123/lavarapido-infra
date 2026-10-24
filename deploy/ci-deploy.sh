@@ -24,11 +24,16 @@ for service in "${services[@]}"; do
   fi
 done
 
-# una actualización a la vez, aunque la pidan dos personas al mismo tiempo
+# una actualización a la vez. Si ya hay otra corriendo (p. ej. la del arranque de la VM), se espera
+# a que termine y después se actualiza igual: update-server.sh vuelve a bajar los repos, así que
+# lo que entró a main mientras tanto también se despliega. 20 minutos cubren una reconstrucción completa.
 exec 9> /tmp/lavarapido-deploy.lock
 if ! flock -n 9; then
-  echo "Ya hay una actualización en curso en el servidor; inténtalo cuando termine."
-  exit 3
+  echo "Hay otra actualización en curso en el servidor; esperando a que termine..."
+  if ! flock -w 1200 9; then
+    echo "La otra actualización lleva más de 20 minutos; revisa ~/lavarapido/backups/deploy.log en el servidor."
+    exit 3
+  fi
 fi
 
 bash "$(dirname "$0")/update-server.sh" "${services[@]}"
