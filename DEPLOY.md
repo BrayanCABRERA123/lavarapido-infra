@@ -25,8 +25,8 @@ curl -fsSL https://raw.githubusercontent.com/BrayanCABRERA123/lavarapido-infra/m
 bash setup-server.sh
 ```
 
-Instala Docker si falta, crea 4 GB de swap si no hay y clona los 9 repos en `~/lavarapido` (rama `main`, la de las versiones aprobadas; payment
-sigue en `develop` hasta que su `main` tenga la v1.0.0, ver `DEVELOP_ONLY` en el script). Volver a
+Instala Docker si falta, crea 4 GB de swap si no hay y clona los 9 repos en `~/lavarapido` (rama `main`, la de las versiones aprobadas; si algún
+repo todavía no tuviera su release en `main`, se puede desplegar desde `develop` con `DEVELOP_ONLY` en el script). Volver a
 ejecutarlo actualiza todos los repos. Si algún repo es privado, git pedirá usuario y un token de GitHub.
 
 ## 3. Configurar
