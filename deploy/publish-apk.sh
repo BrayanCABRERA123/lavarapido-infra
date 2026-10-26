@@ -22,8 +22,19 @@ SIZE=$(stat -c %s "$DIR/.download.apk")
 [ "$SIZE" -gt 1000000 ] || { rm -f "$DIR/.download.apk"; echo "El archivo bajado no parece un APK ($SIZE bytes)"; exit 1; }
 mv "$DIR/.download.apk" "$DIR/LavaRapidoVehicular.apk"
 
-# JSON sin herramientas extra: las notas se escapan a mano (comillas y barras)
-ESCAPED_NOTES=$(printf '%s' "$NOTES" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+# JSON sin herramientas extra: las notas se escapan a mano. Barras, comillas, saltos de línea,
+# retornos y tabuladores se escapan; los demás caracteres de control (no deberían venir en unas
+# notas) se quitan, porque JSON no los acepta sueltos dentro de una cadena. Las tildes quedan igual.
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s" | tr -d '\000-\037'
+}
+ESCAPED_NOTES=$(json_escape "$NOTES")
 cat > "$DIR/.version.json" <<EOF
 {
   "versionCode": $VERSION_CODE,

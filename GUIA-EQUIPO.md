@@ -82,13 +82,16 @@ copy .env.example .env
 Abre `.env` y llena:
 
 - **`DB_PASSWORD`**: la contraseña que quieras para SQL Server. Debe tener mínimo 8 caracteres
-  con mayúscula, minúscula, número y símbolo (ej. `Lavado_Local2026!`). Si es débil, SQL Server
-  no arranca.
+  con mayúscula, minúscula, número y símbolo. Invéntala tú: no copies una de un documento,
+  porque quedaría igual en el PC de todos. Si es débil, SQL Server no arranca.
 - **`JWT_SECRET`**: una llave larga (mínimo 32 caracteres). Puedes generarla con:
   ```powershell
   [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
   ```
   Todos los servicios de **tu** PC usan la misma, porque la leen del mismo `.env`.
+- **`INTERNAL_API_KEY`**: la llave entre servicios. **Sin ella el operario no puede iniciar ni
+  terminar servicios** (la API responde 503) y no hay asignación automática. No trae valor por
+  defecto: genera otra llave con el mismo comando de `JWT_SECRET` (un valor distinto).
 
 > ⚠️ El `.env` **nunca se sube** a GitHub (ya está en `.gitignore`). Cada quien tiene el suyo.
 
@@ -110,7 +113,7 @@ api-gateway (8080); el gateway reparte cada petición al servicio que le toca (A
 |---|---|---|---|
 | 1 | — | Abrir **Docker Desktop** | Dice *Engine running* |
 | 2 | `lavarapido-infra` | `docker compose up -d` | `docker compose ps` muestra `lavarapido-sqlserver` **healthy** y `lavarapido-mailpit` arriba |
-| 3 | `lavarapido-security-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started SecurityServiceApplication` |
+| 3 | `lavarapido-security-service` | `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"` (no hay perfil por defecto, E-05) | Sale `Started SecurityServiceApplication` |
 | 4 | `lavarapido-customer-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started CustomerServiceApplication` |
 | 5 | `lavarapido-booking-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started BookingServiceApplication` |
 | 6 | `lavarapido-operation-service` | `.\mvnw.cmd spring-boot:run` | Sale `Started OperationServiceApplication` |
@@ -141,13 +144,18 @@ Deben pasar todas (`BUILD SUCCESS`). No necesitan la base de datos.
 
 ## 5. Usuarios de prueba para entrar a cada pantalla
 
-Se crean solos la primera vez que arranca `lavarapido-security-service` (perfil `dev`).
+Se crean solos la primera vez que arranca `lavarapido-security-service` con el perfil `dev`, **solo si**
+definiste sus contraseñas en tu `lavarapido-infra/.env` (las contraseñas ya no están en el código ni en
+este documento, E-05). La cuenta cuya variable quede vacía no se crea.
 
-| Rol | Correo | Contraseña | Entra a |
+| Rol | Correo | Variable con la contraseña | Entra a |
 |---|---|---|---|
-| Administrador | `admin@gmail.com` | `Admin123!` | `/admin` |
-| Operario | `operador@gmail.com` | `Operador123!` | `/operator` |
-| Cliente | `cliente@gmail.com` | `Cliente123!` | `/client` |
+| Administrador | `admin@gmail.com` | `DEMO_ADMIN_PASSWORD` | `/admin` |
+| Operario | `operador@gmail.com` | `DEMO_OPERATOR_PASSWORD` | `/operator` |
+| Cliente | `cliente@gmail.com` | `DEMO_CLIENT_PASSWORD` | `/client` |
+
+Las contraseñas deben cumplir la política (8+ caracteres con mayúscula, número y símbolo). Si ya tenías
+estas cuentas creadas con las contraseñas antiguas, siguen funcionando hasta que las cambies.
 
 - Cada rol **solo** puede entrar a su área; si intentas otra, te devuelve a la tuya.
 - Sin iniciar sesión no se puede entrar a `/admin`, `/operator` ni `/client`.
@@ -180,7 +188,8 @@ El código dura 15 minutos, sirve una sola vez y se bloquea después de 5 intent
 
 ### Reglas de contraseña
 
-Mínimo 8 caracteres, una mayúscula, un número y un carácter especial (ej. `Lavado2026!`).
+Mínimo 8 caracteres, una mayúscula, un número y un carácter especial. (Aquí no va un ejemplo a
+propósito: una contraseña escrita en un documento termina usándola todo el equipo.)
 
 ---
 
@@ -227,9 +236,9 @@ el puerto del servicio como en la tabla de arriba, o a través del 8080 con la m
 
 1. Abre `POST /api/v1/auth/login` → **Try it out** → cuerpo:
    ```json
-   { "email": "admin@gmail.com", "password": "Admin123!" }
+   { "email": "admin@gmail.com", "password": "<la de DEMO_ADMIN_PASSWORD en tu .env>" }
    ```
-   → **Execute**.
+   → **Execute**. (La cuenta existe solo si definiste `DEMO_ADMIN_PASSWORD`, ver sección 5.)
 2. Copia el `accessToken` de la respuesta.
 3. Botón **Authorize** (arriba a la derecha) → pega el token → **Authorize**.
 4. Ya puedes ejecutar cualquier endpoint, por ejemplo `GET /api/v1/admin/users`.
@@ -401,6 +410,7 @@ En `lavarapido-infra/docker-compose.yml` copien el bloque `security-service` y c
 | `Port 3001 was already in use` | Ya hay otra copia del servicio corriendo | `Get-NetTCPConnection -LocalPort 3001 -State Listen` y cerrar ese proceso (`Stop-Process -Id <id>`) si es un `java.exe` |
 | `Connection refused ... port 1433` | SQL Server apagado | Abrir Docker Desktop y `docker compose up -d` en `lavarapido-infra` |
 | `security.jwt.secret ... must be set` | Falta el `.env` o el `JWT_SECRET` es corto | Revisar `lavarapido-infra/.env` (sección 3.2) |
+| El operario no puede iniciar ni terminar un servicio (error 503) | Falta `INTERNAL_API_KEY` en el `.env` | Ponerla en `lavarapido-infra/.env` (sección 3.2) y reiniciar booking-service y operation-service |
 | El login dice "No hay conexión con el servidor" | El servicio no está corriendo, o `ng serve` se abrió antes de tener el proxy | Levantar el servicio y reiniciar `ng serve` |
 | SQL Server no arranca en Docker | `DB_PASSWORD` muy débil | Poner una más fuerte en `.env` y `docker compose down -v` + `up -d` |
 | `mvnw` no se reconoce | Estás en PowerShell | Usar `.\mvnw.cmd` |

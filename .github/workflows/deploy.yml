@@ -1,6 +1,13 @@
-# Botón "Run workflow" para actualizar el servidor de Azure con lo último de develop.
-# La VM tiene que estar encendida (se prende desde el portal). La llave AZURE_SSH_KEY solo puede
-# ejecutar deploy/ci-deploy.sh en el servidor: no abre una terminal ni lee nada más.
+# Despliegue continuo (CD) en Azure. Se lanza de tres formas:
+#   1. A mano: Actions → Desplegar en Azure → Run workflow (Servicios vacío = todos).
+#   2. Solo, cuando otro repo fusiona a main: su ci.yml, si el CI pasa, llama a este workflow con
+#      automatic=true (secreto DEPLOY_DISPATCH_TOKEN en ese repo). Siempre actualiza todo: lo que no
+#      cambió se reutiliza, y así ningún pedido se pierde si llegan varios seguidos.
+#   3. Solo, cuando cambia main de este repo (compose o scripts de deploy/).
+# Si la VM está apagada, un despliegue automático no falla: queda el aviso y la VM se pone al día
+# sola al encenderse (deploy/boot-update.sh). Uno manual sí falla, para que se sepa que hay que prenderla.
+# Si el sitio responde por HTTPS pero el SSH no, la VM está encendida: falla siempre (no es "apagada").
+# La llave AZURE_SSH_KEY solo puede ejecutar deploy/ci-deploy.sh en el servidor: no abre una terminal.
 name: Desplegar en Azure
 
 on:
@@ -10,8 +17,23 @@ on:
         description: 'Servicios separados por espacio (vacío = todos). Ej: web payment-service'
         required: false
         default: ''
+      automatic:
+        description: 'Lo pidió otro repo al fusionar a main (no marcar a mano)'
+        type: boolean
+        required: false
+        default: false
+      source:
+        description: 'Quién lo pidió (repo@commit)'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - 'docker-compose*.yml'
+      - 'deploy/**'
+      - '.github/workflows/deploy.yml'
 
-# un despliegue a la vez; el siguiente espera en vez de cancelar al que va
+# un despliegue a la vez; si llegan varios, espera el último (todos actualizan con lo último de main)
 concurrency:
   group: deploy-azure
   cancel-in-progress: false
@@ -29,16 +51,42 @@ jobs:
   deploy:
     name: Actualizar servidor
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # puede esperar a otra actualización (hasta 20 min) + reconstruir (10-20) + esperar la salud (8)
+    timeout-minutes: 70
+    env:
+      # automático: lo pidió otro repo o cambió main de este repo
+      AUTOMATIC: ${{ github.event_name == 'push' || inputs.automatic }}
+      SOURCE: ${{ inputs.source }}
     steps:
-      - name: ¿La VM está encendida?
+      - name: Quién lo pidió
         run: |
-          if ! timeout 20 bash -c "</dev/tcp/$HOST/22"; then
-            echo "::error::La VM no responde. Préndela en el portal de Azure (vehiclecarwash-vm → Iniciar), espera 2 minutos y vuelve a correr este workflow."
+          echo "Pedido por ${SOURCE:-$GITHUB_EVENT_NAME} (automático: $AUTOMATIC)"
+
+      - name: ¿La VM está encendida?
+        id: vm
+        run: |
+          if timeout 20 bash -c "</dev/tcp/$HOST/22"; then
+            echo "up=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "up=false" >> "$GITHUB_OUTPUT"
+          # el SSH no responde: si el sitio sí responde por HTTPS, la VM está encendida y lo que falla es
+          # el acceso (sshd o la regla del puerto 22 en Azure). Eso nunca pasa por "VM apagada", ni en
+          # los automáticos, porque al encender no habría un arranque que la ponga al día
+          site_status=$(curl -s -o /dev/null --max-time 15 -w '%{http_code}' "$SITE/" || true)
+          if [ "$site_status" != 000 ]; then
+            echo "::error::La VM está encendida (el sitio responde $site_status por HTTPS) pero el SSH (puerto 22) no: no se desplegó. Revisa sshd y la regla del puerto 22 en Azure, y vuelve a correr este workflow."
             exit 1
           fi
+          if [ "$AUTOMATIC" = true ]; then
+            echo "::warning::La VM está apagada: no se desplegó ahora. Al encenderla se actualiza sola con lo último de main (deploy/boot-update.sh)."
+            exit 0
+          fi
+          echo "::error::La VM no responde. Préndela en el portal de Azure (vehiclecarwash-vm → Iniciar), espera 2 minutos y vuelve a correr este workflow."
+          exit 1
 
       - name: Preparar la llave
+        if: steps.vm.outputs.up == 'true'
         env:
           SSH_KEY: ${{ secrets.AZURE_SSH_KEY }}
         run: |
@@ -52,16 +100,23 @@ jobs:
           printf '%s\n' "$KNOWN_HOST" > ~/.ssh/known_hosts
 
       - name: Actualizar
+        if: steps.vm.outputs.up == 'true'
+        timeout-minutes: 60
         env:
           SERVICES: ${{ inputs.services }}
-        run: ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "azureuser@$HOST" "deploy $SERVICES"
+        run: |
+          # SERVICES se expande aquí a propósito: el servidor lo recibe en SSH_ORIGINAL_COMMAND y ci-deploy.sh lo valida
+          # shellcheck disable=SC2029
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "azureuser@$HOST" "deploy $SERVICES"
 
       - name: Comprobar que responde
+        if: steps.vm.outputs.up == 'true'
         run: |
-          # los servicios Java tardan 1-2 minutos en arrancar después de reconstruirse
-          for i in $(seq 1 30); do
-            api=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/api/v1/catalog/services" || true)
-            web=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/" || true)
+          # los servicios Java tardan 1-2 minutos en arrancar después de reconstruirse. --max-time: una
+          # conexión colgada no deja el paso esperando sin fin
+          for _ in $(seq 1 30); do
+            api=$(curl -s -o /dev/null --max-time 10 -w '%{http_code}' "$SITE/api/v1/catalog/services" || true)
+            web=$(curl -s -o /dev/null --max-time 10 -w '%{http_code}' "$SITE/" || true)
             if [ "$api" = 200 ] && [ "$web" = 200 ]; then
               echo "Web y API responden 200"
               exit 0
@@ -69,5 +124,9 @@ jobs:
             echo "Esperando a los servicios (web $web, api $api)..."
             sleep 10
           done
-          echo "::error::El servidor se actualizó pero la web o la API no responden después de 5 minutos."
+          echo "::error::El servidor se actualizó pero la web o la API no responden 200 después de 30 intentos (unos 5 minutos)."
+          # qué respondió la API, para saber por qué: --fail-with-body muestra el error del servidor
+          echo "Respuesta de $SITE/api/v1/catalog/services:"
+          curl -sS --max-time 10 --fail-with-body "$SITE/api/v1/catalog/services" | head -c 2000 || true
+          echo
           exit 1

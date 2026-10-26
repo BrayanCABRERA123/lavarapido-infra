@@ -57,12 +57,15 @@ services:
         condition: service_completed_successfully
     volumes:
       - ../lavarapido-payment-service/db:/liquibase/changelog/db:ro
+    environment:
+      # la contraseña va por variable de entorno y no como argumento: los argumentos de un proceso
+      # se ven en la lista de procesos del servidor (ps), las variables no (E-05)
+      LIQUIBASE_COMMAND_PASSWORD: ${DB_PASSWORD}
     command:
       - --search-path=/liquibase/changelog
       - --changelog-file=db/changelog/db.changelog-master.yaml
       - --url=jdbc:sqlserver://sqlserver:1433;databaseName=${DB_NAME:-LavaRapido};encrypt=true;trustServerCertificate=true
       - --username=sa
-      - --password=${DB_PASSWORD}
       - --database-change-log-table-name=DATABASECHANGELOG_PAYMENT
       - --database-change-log-lock-table-name=DATABASECHANGELOGLOCK_PAYMENT
       - update
@@ -118,6 +121,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Backend/.env (see .env.example)}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
+      # cuentas demo del perfil dev (E-05): vacía = esa cuenta no se crea
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-}
+      DEMO_OPERATOR_PASSWORD: ${DEMO_OPERATOR_PASSWORD:-}
+      DEMO_CLIENT_PASSWORD: ${DEMO_CLIENT_PASSWORD:-}
       # Correo: dentro de Docker, Mailpit se llama "mailpit" (no "localhost").
       # Con Gmail/Brevo se usan tal cual los valores del .env.
       MAIL_ENABLED: ${MAIL_ENABLED:-false}
@@ -128,6 +135,8 @@ services:
       MAIL_FROM: ${MAIL_FROM:-LavaRápido <no-reply@lavarapido.local>}
       # llave para las rutas entre servicios /internal/** (ADR-011 sección 8)
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      # A-01 (RF-001): dominios de correo permitidos al registrarse, crear usuarios y cambiar el correo
+      ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-gmail.com}
       # Eventos (ADR-004): dentro de Docker, RabbitMQ se llama "rabbitmq"
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
@@ -155,6 +164,12 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8081}
       # de aquí saca el person_id cuando el evento de registro no llegó (REST, ADR-004)
       SECURITY_SERVICE_URL: http://security-service:3001/api/v1
+      # antes de retirar un vehículo le pregunta a booking si tiene reservas activas
+      # (GET /internal/v1/bookings/active-count con la llave entre servicios, BIZ-08).
+      # Vacía la llave: booking rechaza la pregunta y retirar un vehículo no funciona.
+      # Es la raíz del servicio, sin /api/v1: la ruta /internal/v1/... va desde ahí.
+      BOOKING_SERVICE_URL: http://booking-service:3003
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       # escucha security.user_registered para crear el perfil del cliente
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
@@ -190,6 +205,14 @@ services:
       BOOKING_EXPIRY_CHECK_ENABLED: ${BOOKING_EXPIRY_CHECK_ENABLED:-true}
       BOOKING_EXPIRY_CHECK_INTERVAL: ${BOOKING_EXPIRY_CHECK_INTERVAL:-PT5M}
       BOOKING_EXPIRY_GRACE_MINUTES: ${BOOKING_EXPIRY_GRACE_MINUTES:-60}
+      # pago al reservar: máximo de reservas activas en efectivo por cliente y plazo para subir el
+      # comprobante de una reserva digital; el job cancela las vencidas (antes le pregunta a payment)
+      BOOKING_CASH_ACTIVE_LIMIT: ${BOOKING_CASH_ACTIVE_LIMIT:-1}
+      BOOKING_PAYMENT_WINDOW: ${BOOKING_PAYMENT_WINDOW:-30m}
+      BOOKING_PAYMENT_EXPIRY_ENABLED: ${BOOKING_PAYMENT_EXPIRY_ENABLED:-true}
+      BOOKING_PAYMENT_EXPIRY_INTERVAL: ${BOOKING_PAYMENT_EXPIRY_INTERVAL:-60s}
+      # /internal/v1/payments/bookings/{id}/reported con la llave entre servicios
+      PAYMENT_SERVICE_URL: http://payment-service:3005
       # publica BookingConfirmed / BookingCancelled a notification-service
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
@@ -301,6 +324,8 @@ services:
       PAYMENT_PORT: "3005"
       # cliente REST hacia booking-service (ADR-004): faltaba, lo necesita IBookingDirectory
       BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
+      # booking pregunta por /internal/v1/payments/... si una reserva ya tiene comprobante
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       # carwash.events (fidelización/promociones: ADR-011, canje de cupones)
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq

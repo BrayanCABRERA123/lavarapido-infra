@@ -2,12 +2,23 @@
 # Prepara el servidor (Ubuntu con Docker) y baja o actualiza todos los repos de LavaRápido en
 # ~/lavarapido, uno al lado del otro, como los espera docker-compose.yml (build: ../<repo>).
 #
-#   bash setup-server.sh            # rama develop
-#   BRANCH=main bash setup-server.sh
+#   bash setup-server.sh               # rama main: las versiones aprobadas por PR
+#   BRANCH=develop bash setup-server.sh
 set -euo pipefail
 
-BRANCH="${BRANCH:-develop}"
+BRANCH="${BRANCH:-main}"
 ROOT="${ROOT:-$HOME/lavarapido}"
+# repos que todavía se despliegan desde develop porque su main aún no tiene la primera versión
+# (v1.0.0): con main bajarían una versión vieja. Se quitan de aquí cuando la tengan.
+DEVELOP_ONLY="${DEVELOP_ONLY:-lavarapido-payment-service}"
+
+branch_for() {
+  local name="$1" repo
+  for repo in $DEVELOP_ONLY; do
+    if [ "$repo" = "$name" ]; then echo develop; return; fi
+  done
+  echo "$BRANCH"
+}
 
 REPOS=(
   "https://github.com/BrayanCABRERA123/lavarapido-infra.git"
@@ -48,21 +59,33 @@ fi
 # inesperados (stderr) también van ahí.
 mkdir -p "$ROOT/backups" && chmod 700 "$ROOT/backups"
 job="bash $ROOT/lavarapido-infra/deploy/backup-db.sh > /dev/null 2>> $ROOT/backups/backup.log && bash $ROOT/lavarapido-infra/deploy/verify-backup.sh > /dev/null 2>> $ROOT/backups/backup.log"
+# al arrancar, la VM también se pone al día con lo que entró a main mientras estaba apagada
+# (deploy/boot-update.sh); deja el resultado en backups/deploy.log
+boot="bash $ROOT/lavarapido-infra/deploy/boot-update.sh >> $ROOT/backups/deploy.log 2>&1"
 # crontab -l falla si todavía no hay ninguna tarea: no es un error
-{ crontab -l 2>/dev/null | grep -vE 'lavarapido-backup|deploy/backup-db\.sh' || true
+{ crontab -l 2>/dev/null | grep -vE 'lavarapido-backup|lavarapido-boot-update|deploy/backup-db\.sh' || true
   echo "# lavarapido-backup: respaldo y verificación de la base al arrancar la VM y cada día"
   echo "@reboot sleep 300 && $job # lavarapido-backup"
   echo "0 23 * * * $job # lavarapido-backup"
+  echo "# lavarapido-boot-update: al arrancar, actualizar si hay versiones nuevas en main"
+  echo "@reboot sleep 120 && $boot # lavarapido-boot-update"
 } | crontab -
 
 sync_repo() {
-  local url="$1" name="$2"
+  local url="$1" name="$2" branch="$3"
   if [ -d "$name/.git" ]; then
-    git -C "$name" fetch --quiet origin &&
-      git -C "$name" checkout --quiet "$BRANCH" &&
-      git -C "$name" pull --quiet --ff-only origin "$BRANCH"
+    git -C "$name" fetch --quiet origin || return 1
+    # nunca se baja de versión: si lo desplegado no está contenido en la rama pedida (p. ej. cambiar
+    # de develop a un main que todavía no tiene el release) se detiene sin tocar nada.
+    # ALLOW_DOWNGRADE=1 lo permite a propósito
+    if ! git -C "$name" merge-base --is-ancestor HEAD "origin/$branch"; then
+      echo "  $name: lo desplegado no está en origin/$branch; no se baja de versión (ALLOW_DOWNGRADE=1 para forzarlo)"
+      [ "${ALLOW_DOWNGRADE:-0}" = 1 ] || return 1
+    fi
+    git -C "$name" checkout --quiet "$branch" &&
+      git -C "$name" pull --quiet --ff-only origin "$branch"
   else
-    git clone --quiet --branch "$BRANCH" "$url" "$name"
+    git clone --quiet --branch "$branch" "$url" "$name"
   fi
 }
 
@@ -73,11 +96,12 @@ cd "$ROOT"
 FAILED=()
 for url in "${REPOS[@]}"; do
   name="$(basename "$url" .git)"
-  if [ -d "$name/.git" ]; then echo "Actualizando $name ($BRANCH)"; else echo "Clonando $name ($BRANCH)"; fi
-  if ! sync_repo "$url" "$name"; then
+  branch="$(branch_for "$name")"
+  if [ -d "$name/.git" ]; then echo "Actualizando $name ($branch)"; else echo "Clonando $name ($branch)"; fi
+  if ! sync_repo "$url" "$name" "$branch"; then
     echo "  error con $name, reintentando en 5 s..."
     sleep 5
-    sync_repo "$url" "$name" || { echo "  error: $name no se pudo actualizar"; FAILED+=("$name"); }
+    sync_repo "$url" "$name" "$branch" || { echo "  error: $name no se pudo actualizar"; FAILED+=("$name"); }
   fi
 done
 
