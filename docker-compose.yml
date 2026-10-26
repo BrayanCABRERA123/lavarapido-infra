@@ -205,6 +205,14 @@ services:
       BOOKING_EXPIRY_CHECK_ENABLED: ${BOOKING_EXPIRY_CHECK_ENABLED:-true}
       BOOKING_EXPIRY_CHECK_INTERVAL: ${BOOKING_EXPIRY_CHECK_INTERVAL:-PT5M}
       BOOKING_EXPIRY_GRACE_MINUTES: ${BOOKING_EXPIRY_GRACE_MINUTES:-60}
+      # pago al reservar: máximo de reservas activas en efectivo por cliente y plazo para subir el
+      # comprobante de una reserva digital; el job cancela las vencidas (antes le pregunta a payment)
+      BOOKING_CASH_ACTIVE_LIMIT: ${BOOKING_CASH_ACTIVE_LIMIT:-1}
+      BOOKING_PAYMENT_WINDOW: ${BOOKING_PAYMENT_WINDOW:-30m}
+      BOOKING_PAYMENT_EXPIRY_ENABLED: ${BOOKING_PAYMENT_EXPIRY_ENABLED:-true}
+      BOOKING_PAYMENT_EXPIRY_INTERVAL: ${BOOKING_PAYMENT_EXPIRY_INTERVAL:-60s}
+      # /internal/v1/payments/bookings/{id}/reported con la llave entre servicios
+      PAYMENT_SERVICE_URL: http://payment-service:3005
       # publica BookingConfirmed / BookingCancelled a notification-service
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
@@ -316,6 +324,8 @@ services:
       PAYMENT_PORT: "3005"
       # cliente REST hacia booking-service (ADR-004): faltaba, lo necesita IBookingDirectory
       BOOKING_SERVICE_URL: http://booking-service:3003/api/v1
+      # booking pregunta por /internal/v1/payments/... si una reserva ya tiene comprobante
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       # carwash.events (fidelización/promociones: ADR-011, canje de cupones)
       MESSAGING_ENABLED: ${MESSAGING_ENABLED:-false}
       RABBITMQ_HOST: rabbitmq
