@@ -139,6 +139,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       CORS_ALLOWED_ORIGINS: *public-origin
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in .env.production}
 
   api-gateway:
     <<: *java-limits
