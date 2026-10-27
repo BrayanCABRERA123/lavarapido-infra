@@ -59,7 +59,7 @@ test('informe de inspección: hallazgos con fotos, publicar, compartir y enlace 
   const date = farWeekday(52);
   const day = new Date(`${date}T12:00:00Z`).getUTCDay() || 7;
   const opens = sql(`SELECT CONVERT(varchar(5), opens_at, 108) FROM booking.business_hour WHERE day_of_week = ${day}`);
-  const booking = await api('POST', '/bookings', client, { vehicleId: vehicle.id, serviceIds: [state.serviceId], date, time: opens });
+  const booking = await api('POST', '/bookings', client, { vehicleId: vehicle.id, paymentMode: 'DIGITAL', serviceIds: [state.serviceId], date, time: opens });
   assert.equal(booking.status, 201, JSON.stringify(booking.body).slice(0, 160));
   state.bookingId = booking.body.id;
 

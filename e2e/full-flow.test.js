@@ -77,7 +77,7 @@ test('flujo completo: cliente → admin → operario → cliente', async (t) => 
   assert.ok(mineAsOperator, `el operario de prueba no está libre el ${date} a las 09:00: revisa sus turnos`);
 
   const booking = await api('POST', '/bookings', client,
-    { vehicleId: vehicle.id, serviceIds: [service.id], date, time: '09:00', preferredOperatorId: mineAsOperator.operatorId });
+    { vehicleId: vehicle.id, paymentMode: 'DIGITAL', serviceIds: [service.id], date, time: '09:00', preferredOperatorId: mineAsOperator.operatorId });
   assert.equal(booking.status, 201, JSON.stringify(booking.body).slice(0, 160));
   state.bookingId = booking.body.id;
   const total = booking.body.total;
