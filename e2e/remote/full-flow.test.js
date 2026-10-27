@@ -43,7 +43,7 @@ test('flujo completo: cliente → admin → operario → cliente', { skip: L.NEE
   assert.ok(slot, 'el operario de prueba no tiene horas libres en las próximas semanas: revisa sus turnos');
   state.time = slot.time;
   const created = await L.api('POST', '/bookings', { token: client.token,
-    body: { vehicleId: vehicle.id, serviceIds: [main.id], date: state.date, time: state.time, preferredOperatorId: operatorId } });
+    body: { vehicleId: vehicle.id, paymentMode: 'DIGITAL', serviceIds: [main.id], date: state.date, time: state.time, preferredOperatorId: operatorId } });
   assert.equal(created.status, 201, `crear la reserva → ${L.describe(created)}`);
   const booking = created.body;
   cleanup.add(`cancelar la reserva ${booking.id}`, () => L.cancelBooking(admin.token, booking.id));
@@ -235,7 +235,7 @@ test('flujo completo: cliente → admin → operario → cliente', { skip: L.NEE
       return t.skip(`hoy no hay una hora libre del operario que se pueda iniciar en ${START_WAIT_MINUTES} minutos (horario, turno u ocupación)`);
     }
     const res = await L.api('POST', '/bookings', { token: client.token,
-      body: { vehicleId: vehicle.id, serviceIds: [main.id], date: today, time: soon.time, preferredOperatorId: operatorId } });
+      body: { vehicleId: vehicle.id, paymentMode: 'DIGITAL', serviceIds: [main.id], date: today, time: soon.time, preferredOperatorId: operatorId } });
     assert.equal(res.status, 201, `reservar hoy → ${L.describe(res)}`);
     const todayId = res.body.id;
     cleanup.add(`cancelar la reserva de hoy ${todayId} si no empezó`, () => L.cancelBooking(admin.token, todayId));

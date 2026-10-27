@@ -31,7 +31,7 @@ test('reserva → asignación automática → avisos → resumen del día', asyn
   const chosen = free.body[0].operatorId;
 
   const booking = await api('POST', '/bookings', client,
-    { vehicleId: vehicle.id, serviceIds: [service.id], date, time: '09:00', preferredOperatorId: chosen });
+    { vehicleId: vehicle.id, paymentMode: 'DIGITAL', serviceIds: [service.id], date, time: '09:00', preferredOperatorId: chosen });
   assert.equal(booking.status, 201, `booking: crear la reserva (${JSON.stringify(booking.body).slice(0, 120)})`);
   created.push(booking.body.id);
 

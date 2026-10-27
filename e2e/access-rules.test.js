@@ -72,7 +72,7 @@ test('una hora antes de abrir responde que está fuera del horario, no que falta
   const vehicle = (Array.isArray(vehicles.body) ? vehicles.body : vehicles.body.items)[0];
   const services = await api('GET', `/catalog/services?vehicleTypeId=${vehicle.vehicleTypeId}`);
   const answer = await api('POST', '/bookings', client,
-    { vehicleId: vehicle.id, serviceIds: [services.body[0].id], date: farWeekday(47), time: '05:00' });
+    { vehicleId: vehicle.id, paymentMode: 'DIGITAL', serviceIds: [services.body[0].id], date: farWeekday(47), time: '05:00' });
   assert.equal(answer.status, 409);
   assert.equal(answer.body.code, 'SLOT_UNAVAILABLE');
   assert.equal(answer.body.reason, 'OUTSIDE_HOURS');
