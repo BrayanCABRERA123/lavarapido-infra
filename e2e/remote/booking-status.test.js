@@ -20,7 +20,7 @@ async function book(daysAhead) {
   const slot = await L.findSlot({ token: ctx.client.token, date, vehicleTypeId: ctx.type.id, serviceIds: [ctx.service.id], operatorId: ctx.operatorId });
   assert.ok(slot, `el operario de prueba no tiene horas libres el ${date}: revisa sus turnos`);
   const res = await L.api('POST', '/bookings', { token: ctx.client.token, body: {
-    vehicleId: ctx.vehicle.id, serviceIds: [ctx.service.id], date, time: slot.time, preferredOperatorId: ctx.operatorId } });
+    vehicleId: ctx.vehicle.id, paymentMode: 'DIGITAL', serviceIds: [ctx.service.id], date, time: slot.time, preferredOperatorId: ctx.operatorId } });
   assert.equal(res.status, 201, `reservar → ${L.describe(res)}`);
   cleanup.add(`cancelar la reserva ${res.body.id}`, () => L.cancelBooking(ctx.admin.token, res.body.id));
   return res.body;
