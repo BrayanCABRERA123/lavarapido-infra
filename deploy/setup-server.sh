@@ -8,9 +8,10 @@ set -euo pipefail
 
 BRANCH="${BRANCH:-main}"
 ROOT="${ROOT:-$HOME/lavarapido}"
-# repos que todavía se despliegan desde develop porque su main aún no tiene la primera versión
-# (v1.0.0): con main bajarían una versión vieja. Se quitan de aquí cuando la tengan.
-DEVELOP_ONLY="${DEVELOP_ONLY:-lavarapido-payment-service}"
+# repos que se despliegan desde develop aunque se pida main, separados por espacio. Sirve para un
+# repo cuyo main todavía no tenga su primera versión (con main bajaría una versión vieja). Hoy los
+# 10 repos tienen su release en main, así que va vacío
+DEVELOP_ONLY="${DEVELOP_ONLY:-}"
 
 branch_for() {
   local name="$1" repo
